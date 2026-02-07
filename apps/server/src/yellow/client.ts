@@ -12,7 +12,7 @@ import WebSocket from "ws";
 type MessageHandler = (data: any) => void;
 
 type AuthParams = {
-  session_key: string;
+  session_key: `0x${string}`;
   allowances: Array<{ asset: string; amount: string }>;
   expires_at: bigint;
   scope: string;
@@ -173,7 +173,7 @@ export class YellowClient {
     }
 
     const authParams: AuthParams = {
-      session_key: this.sessionSigner.address,
+      session_key: this.sessionSigner.address as `0x${string}`,
       allowances: [],
       expires_at: BigInt(Math.floor(Date.now() / 1000) + 3600),
       scope: this.scope,
@@ -280,7 +280,7 @@ export class YellowClient {
     if (!address) return;
 
     const authParams: AuthParams = this.lastAuthParams ?? {
-      session_key: this.sessionSigner.address,
+      session_key: this.sessionSigner.address as `0x${string}`,
       allowances: [],
       expires_at: BigInt(Math.floor(Date.now() / 1000) + 3600),
       scope: this.application,

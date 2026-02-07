@@ -12,7 +12,7 @@ export function useYellow(address?: string) {
 
   const client = useMemo(() => {
     if (!walletClient || !address) return null;
-    return new YellowRpcClient(walletClient, address);
+    return new YellowRpcClient(walletClient, address as `0x${string}`);
   }, [walletClient, address]);
 
   useEffect(() => {

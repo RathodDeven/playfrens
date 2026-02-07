@@ -42,8 +42,11 @@ export function useGameState(socket: Socket): UseGameStateReturn {
       setGameState(state);
     }
 
-    function onRoomCreated(data: { roomId: string }) {
+    function onRoomCreated(data: { roomId: string; seatIndex?: number }) {
       setRoomId(data.roomId);
+      if (data.seatIndex !== undefined) {
+        setSeatIndex(data.seatIndex);
+      }
     }
 
     function onHandComplete(result: HandResult) {

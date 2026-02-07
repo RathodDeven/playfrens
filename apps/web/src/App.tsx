@@ -5,6 +5,7 @@ import { mainnet } from "wagmi/chains";
 import { PokerTable } from "./components/games/poker/PokerTable";
 import { Header } from "./components/layout/Header";
 import { Lobby } from "./components/lobby/Lobby";
+import { useCustody } from "./hooks/useCustody";
 import { useGameState } from "./hooks/useGameState";
 import { useSocket } from "./hooks/useSocket";
 import { useWalletBalance } from "./hooks/useWalletBalance";
@@ -51,7 +52,14 @@ export function App() {
     refetchBalance,
     requestTokens,
   } = useYellow(address);
-  const { balance: walletBalance } = useWalletBalance(address);
+  const { balance: walletBalance, refetch: refetchWallet } =
+    useWalletBalance(address);
+  const {
+    deposit: custodyDeposit,
+    withdraw: custodyWithdraw,
+    isDepositing: isCustodyDepositing,
+    isWithdrawing: isCustodyWithdrawing,
+  } = useCustody(address);
 
   // Not connected
   if (!isConnected) {
@@ -130,6 +138,18 @@ export function App() {
             await requestTokens();
             await refetchBalance();
           }}
+          onCustodyDeposit={async (amount) => {
+            await custodyDeposit(amount);
+            await refetchWallet();
+            await refetchBalance();
+          }}
+          onCustodyWithdraw={async (amount) => {
+            await custodyWithdraw(amount);
+            await refetchWallet();
+            await refetchBalance();
+          }}
+          isCustodyDepositing={isCustodyDepositing}
+          isCustodyWithdrawing={isCustodyWithdrawing}
         />
       )}
     </div>

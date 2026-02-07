@@ -41,6 +41,12 @@ export function setupSocketHandlers(
         chipUnit: number;
       }) => {
         try {
+          const address = socket.data.address;
+          if (!address) {
+            socket.emit(EVENTS.ERROR, { message: "Not registered" });
+            return;
+          }
+
           const room = roomManager.createRoom(
             {
               gameType: data.gameType,
@@ -74,12 +80,35 @@ export function setupSocketHandlers(
             },
           );
 
+          // Auto-join the creator at seat 0
+          const seatIndex = 0;
+          room.addPlayer(
+            address,
+            seatIndex,
+            room.config.buyIn,
+            socket.data.ensName,
+            socket.data.ensAvatar,
+          );
+
+          socket.join(room.roomId);
+          socketRooms.set(socket.id, {
+            roomId: room.roomId,
+            seatIndex,
+          });
+
           socket.emit(EVENTS.ROOM_CREATED, {
             roomId: room.roomId,
             gameType: room.gameType,
+            seatIndex,
           });
 
-          console.log(`[Room] Created: ${room.roomId} (${data.gameType})`);
+          // Send initial game state to the creator
+          const playerState = room.getPlayerState(seatIndex);
+          socket.emit(EVENTS.GAME_STATE, playerState);
+
+          console.log(
+            `[Room] Created: ${room.roomId} (${data.gameType}) — ${address} joined at seat ${seatIndex}`,
+          );
         } catch (err: any) {
           socket.emit(EVENTS.ERROR, { message: err.message });
         }

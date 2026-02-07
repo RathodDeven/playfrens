@@ -14,6 +14,10 @@ export function Lobby({
   isAuthorizing,
   onAuthorize,
   onDeposit,
+  onCustodyDeposit,
+  onCustodyWithdraw,
+  isCustodyDepositing,
+  isCustodyWithdrawing,
 }: {
   onCreateRoom: (config: {
     buyIn: number;
@@ -29,6 +33,10 @@ export function Lobby({
   isAuthorizing: boolean;
   onAuthorize: () => Promise<void>;
   onDeposit: () => Promise<void>;
+  onCustodyDeposit: (amount: string) => Promise<void>;
+  onCustodyWithdraw: (amount: string) => Promise<void>;
+  isCustodyDepositing: boolean;
+  isCustodyWithdrawing: boolean;
 }) {
   const [joinCode, setJoinCode] = useState("");
   const [showDeposit, setShowDeposit] = useState(false);
@@ -239,7 +247,12 @@ export function Lobby({
         isOpen={showDeposit}
         onClose={() => setShowDeposit(false)}
         balance={balance}
+        walletBalance={walletBalance}
         onDeposit={onDeposit}
+        onCustodyDeposit={onCustodyDeposit}
+        onCustodyWithdraw={onCustodyWithdraw}
+        isCustodyDepositing={isCustodyDepositing}
+        isCustodyWithdrawing={isCustodyWithdrawing}
       />
     </div>
   );

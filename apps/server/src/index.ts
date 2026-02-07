@@ -101,9 +101,9 @@ httpServer.listen(PORT, () => {
     .flat()
     .filter(
       (info): info is os.NetworkInterfaceInfo =>
-        Boolean(info) && info.family === "IPv4" && !info.internal,
+        info !== undefined && info.family === "IPv4" && !info.internal,
     )
-    .map((info) => `http://${info.address}:${PORT}`);
+    .map((info: os.NetworkInterfaceInfo) => `http://${info.address}:${PORT}`);
 
   const networkUrl = addresses[0] || `http://localhost:${PORT}`;
   console.log(`

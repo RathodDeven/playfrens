@@ -7,8 +7,7 @@ export function useWalletBalance(address?: `0x${string}`) {
     address,
     token: CONTRACTS.TOKEN,
     chainId: baseSepolia.id,
-    watch: true,
-    enabled: Boolean(address),
+    query: { enabled: Boolean(address) },
   });
 
   return {

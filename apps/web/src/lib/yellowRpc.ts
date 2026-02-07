@@ -21,7 +21,7 @@ const DEFAULT_ALLOWANCES = [
 ];
 
 type AuthParams = {
-  session_key: string;
+  session_key: `0x${string}`;
   allowances: Array<{ asset: string; amount: string }>;
   expires_at: bigint;
   scope: string;

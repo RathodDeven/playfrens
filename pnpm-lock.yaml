@@ -75,6 +75,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@erc7824/nitrolite':
+        specifier: ^0.5.3
+        version: 0.5.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@playfrens/shared':
         specifier: workspace:*
         version: link:../../packages/shared
