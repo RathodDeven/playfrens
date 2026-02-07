@@ -31,6 +31,7 @@ export function computeAllocations(
   chipCounts: Map<number, number>,
   seatToAddress: Map<number, string>,
   totalDeposit: number,
+  chipUnit: number,
 ): Map<string, number> {
   const allocations = new Map<string, number>();
 
@@ -38,6 +39,9 @@ export function computeAllocations(
   for (const p of participants) {
     allocations.set(p, 0);
   }
+
+  const roundAmount = (value: number) =>
+    Math.round(value * 1_000_000) / 1_000_000;
 
   // Calculate total chips in play
   let totalChips = 0;
@@ -47,12 +51,31 @@ export function computeAllocations(
 
   if (totalChips === 0) return allocations;
 
-  // Proportionally allocate based on chip counts
+  // Allocate based on chips -> ytest.usd, then normalize to totalDeposit
+  let allocatedTotal = 0;
+  let topSeat: number | null = null;
+  let topChips = -1;
+
   for (const [seat, chips] of chipCounts) {
     const address = seatToAddress.get(seat);
-    if (address) {
-      const share = Math.floor((chips / totalChips) * totalDeposit);
-      allocations.set(address, share);
+    if (!address) continue;
+
+    const amount = roundAmount(chips * chipUnit);
+    allocations.set(address, amount);
+    allocatedTotal = roundAmount(allocatedTotal + amount);
+
+    if (chips > topChips) {
+      topChips = chips;
+      topSeat = seat;
+    }
+  }
+
+  const diff = roundAmount(totalDeposit - allocatedTotal);
+  if (diff !== 0 && topSeat !== null) {
+    const topAddress = seatToAddress.get(topSeat);
+    if (topAddress) {
+      const current = allocations.get(topAddress) ?? 0;
+      allocations.set(topAddress, roundAmount(current + diff));
     }
   }
 

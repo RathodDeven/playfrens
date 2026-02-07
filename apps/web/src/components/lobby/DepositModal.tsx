@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useState } from "react";
+import { formatYusd } from "../../lib/format";
 
 export function DepositModal({
   isOpen,
@@ -10,14 +11,19 @@ export function DepositModal({
   isOpen: boolean;
   onClose: () => void;
   balance: string;
-  onDeposit: () => void;
+  onDeposit: () => Promise<void>;
 }) {
   const [isDepositing, setIsDepositing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleDeposit = async () => {
     setIsDepositing(true);
+    setError(null);
     try {
-      onDeposit();
+      await onDeposit();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Request failed";
+      setError(message);
     } finally {
       setTimeout(() => setIsDepositing(false), 2000);
     }
@@ -49,15 +55,21 @@ export function DepositModal({
               <div className="flex justify-between items-center px-4 py-3 rounded-xl bg-surface-light">
                 <span className="text-white/60">Yellow Balance</span>
                 <span className="font-mono text-neon-green font-bold">
-                  {balance} USDC
+                  {formatYusd(Number(balance))} ytest.usd
                 </span>
               </div>
             </div>
 
             <p className="text-sm text-white/50">
               This is testnet — tokens are free! Hit the faucet to get test
-              USDC deposited into your Yellow Network state channel.
+              ytest.usd deposited into your Yellow Network state channel.
             </p>
+
+            {error && (
+              <p className="text-sm text-red-400">
+                {error}
+              </p>
+            )}
 
             <div className="flex gap-3">
               <motion.button

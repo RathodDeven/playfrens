@@ -5,6 +5,7 @@ export const EVENTS = {
   JOIN_ROOM: "join-room",
   PLAYER_JOINED: "player-joined",
   LEAVE_ROOM: "leave-room",
+  CASH_OUT: "cash-out",
   PLAYER_LEFT: "player-left",
   ROOM_LIST: "room-list",
   ROOM_UPDATE: "room-update",
@@ -26,6 +27,7 @@ export const EVENTS = {
   ERROR: "error",
   REGISTER: "register",
   REGISTERED: "registered",
+  CASHED_OUT: "cashed-out",
 } as const;
 
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS];

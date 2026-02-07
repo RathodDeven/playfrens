@@ -188,6 +188,7 @@ export class PokerRoom extends GameRoom {
       dealerSeat,
       handNumber: this.handNumber,
       isHandInProgress: this.table.isHandInProgress(),
+      chipUnit: this.config.chipUnit,
     };
   }
 

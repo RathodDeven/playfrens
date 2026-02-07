@@ -2,15 +2,18 @@ import { motion } from "motion/react";
 import type { SeatState, PokerCard } from "@playfrens/shared";
 import { Card } from "./Card";
 import { ChipStack } from "./ChipStack";
+import { formatYusd } from "../../../lib/format";
 
 export function PlayerSeat({
   seat,
   isHero,
   holeCards,
+  chipUnit,
 }: {
   seat: SeatState;
   isHero: boolean;
   holeCards?: PokerCard[];
+  chipUnit: number;
 }) {
   const displayName =
     seat.ensName ||
@@ -39,7 +42,9 @@ export function PlayerSeat({
       </div>
 
       {/* Bet */}
-      {seat.betAmount > 0 && <ChipStack amount={seat.betAmount} />}
+      {seat.betAmount > 0 && (
+        <ChipStack amount={seat.betAmount} chipUnit={chipUnit} />
+      )}
 
       {/* Player Info */}
       <motion.div
@@ -73,7 +78,7 @@ export function PlayerSeat({
 
         {/* Chips */}
         <p className="text-xs font-mono text-neon-green">
-          {seat.chipCount}
+          {formatYusd(seat.chipCount * chipUnit)} ytest.usd
           {seat.isAllIn && (
             <span className="ml-1 text-red-400 font-bold">ALL IN</span>
           )}

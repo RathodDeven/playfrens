@@ -1,7 +1,14 @@
 import { motion, AnimatePresence } from "motion/react";
 import type { PotInfo } from "@playfrens/shared";
+import { formatYusd } from "../../../lib/format";
 
-export function PotDisplay({ pots }: { pots: PotInfo[] }) {
+export function PotDisplay({
+  pots,
+  chipUnit,
+}: {
+  pots: PotInfo[];
+  chipUnit: number;
+}) {
   const totalPot = pots.reduce((sum, p) => sum + p.amount, 0);
 
   if (totalPot === 0) return null;
@@ -16,7 +23,7 @@ export function PotDisplay({ pots }: { pots: PotInfo[] }) {
         <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-neon-yellow/20 border border-neon-yellow/30">
           <ChipIcon />
           <span className="font-bold text-neon-yellow font-mono">
-            {totalPot}
+            {formatYusd(totalPot * chipUnit)} ytest.usd
           </span>
         </div>
         {pots.length > 1 && (
@@ -26,7 +33,7 @@ export function PotDisplay({ pots }: { pots: PotInfo[] }) {
                 key={`pot-${pot.amount}-${i}`}
                 className="text-xs text-white/40"
               >
-                {i === 0 ? "Main" : `Side ${i}`}: {pot.amount}
+                {i === 0 ? "Main" : `Side ${i}`}: {formatYusd(pot.amount * chipUnit)} ytest.usd
               </span>
             ))}
           </div>

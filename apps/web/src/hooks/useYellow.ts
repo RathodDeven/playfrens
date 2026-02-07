@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getYellowBalance } from "../lib/yellow";
+import { getYellowBalance, requestFaucetTokens } from "../lib/yellow";
 
 export function useYellow(address?: string) {
   const [balance, setBalance] = useState<string>("0");
@@ -26,5 +26,9 @@ export function useYellow(address?: string) {
     balance,
     isLoading,
     refetchBalance: fetchBalance,
+    requestTokens: async () => {
+      if (!address) throw new Error("Wallet not connected");
+      await requestFaucetTokens(address);
+    },
   };
 }

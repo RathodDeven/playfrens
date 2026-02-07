@@ -10,6 +10,7 @@ export interface RoomConfig {
   buyIn: number;
   smallBlind: number;
   bigBlind: number;
+  chipUnit: number;
 }
 
 export interface RoomInfo {

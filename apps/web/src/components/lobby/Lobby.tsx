@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { GAME_DEFAULTS } from "@playfrens/shared";
+import { CHIP_UNITS, GAME_DEFAULTS } from "@playfrens/shared";
 import { FriendSearch } from "./FriendSearch";
 import { DepositModal } from "./DepositModal";
+import { formatYusd } from "../../lib/format";
 
 export function Lobby({
   onCreateRoom,
@@ -15,16 +16,20 @@ export function Lobby({
     smallBlind: number;
     bigBlind: number;
     maxPlayers: number;
+    chipUnit: number;
   }) => void;
   onJoinRoom: (roomId: string, seatIndex: number) => void;
   balance: string;
-  onDeposit: () => void;
+  onDeposit: () => Promise<void>;
 }) {
   const [joinCode, setJoinCode] = useState("");
   const [showDeposit, setShowDeposit] = useState(false);
   const [buyIn, setBuyIn] = useState<number>(GAME_DEFAULTS.DEFAULT_BUY_IN);
   const [smallBlind, setSmallBlind] = useState<number>(GAME_DEFAULTS.DEFAULT_SMALL_BLIND);
   const [bigBlind, setBigBlind] = useState<number>(GAME_DEFAULTS.DEFAULT_BIG_BLIND);
+  const [chipUnit, setChipUnit] = useState<number>(
+    GAME_DEFAULTS.DEFAULT_CHIP_UNIT,
+  );
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] p-6">
@@ -57,7 +62,8 @@ export function Lobby({
           <div>
             <p className="text-sm text-white/50">Yellow Balance</p>
             <p className="text-2xl font-bold font-mono text-neon-green">
-              {balance} <span className="text-sm text-white/40">USDC</span>
+              {formatYusd(Number(balance))}{" "}
+              <span className="text-sm text-white/40">ytest.usd</span>
             </p>
           </div>
           <motion.button
@@ -104,6 +110,29 @@ export function Lobby({
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-white/40">Chip Unit</label>
+              <select
+                value={chipUnit}
+                onChange={(e) => setChipUnit(Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-lg bg-surface-light border border-white/10 text-white text-sm focus:outline-none focus:border-neon-green"
+              >
+                {CHIP_UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    1 chip = {formatYusd(unit)} ytest.usd
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-white/40">Buy-in (ytest.usd)</label>
+              <div className="px-3 py-2 rounded-lg bg-surface-light border border-white/10 text-white text-sm">
+                {formatYusd(buyIn * chipUnit)} ytest.usd
+              </div>
+            </div>
+          </div>
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -113,6 +142,7 @@ export function Lobby({
                 smallBlind,
                 bigBlind,
                 maxPlayers: GAME_DEFAULTS.MAX_PLAYERS,
+                chipUnit,
               })
             }
             className="w-full py-3 rounded-xl bg-gradient-to-r from-neon-pink to-neon-purple text-white font-bold text-lg hover:brightness-110 transition-all"

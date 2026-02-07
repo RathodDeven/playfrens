@@ -1,6 +1,6 @@
 # PlayFrens
 
-On-chain multiplayer game platform where friends find each other via ENS, deposit USDC into Yellow Network state channels, play games off-chain (instant, gasless), and withdraw when done.
+On-chain multiplayer game platform where friends find each other via ENS, deposit ytest.usd into Yellow Network state channels, play games off-chain (instant, gasless), and withdraw when done.
 
 Built for the Yellow Network + ENS hackathon tracks. Base Sepolia testnet. No custom smart contracts needed — uses Yellow's deployed Custody + Adjudicator contracts.
 

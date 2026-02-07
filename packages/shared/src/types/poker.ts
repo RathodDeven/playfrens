@@ -62,6 +62,7 @@ export interface PokerGameState {
   dealerSeat: number;
   handNumber: number;
   isHandInProgress: boolean;
+  chipUnit: number;
 }
 
 export interface PokerPlayerState extends PokerGameState {

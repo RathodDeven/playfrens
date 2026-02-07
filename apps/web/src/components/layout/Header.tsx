@@ -4,9 +4,11 @@ import { motion } from "motion/react";
 export function Header({
   roomId,
   onLeaveRoom,
+  onCashOut,
 }: {
   roomId: string | null;
   onLeaveRoom: () => void;
+  onCashOut: () => void;
 }) {
   return (
     <header className="flex items-center justify-between px-6 py-4 glass">
@@ -31,14 +33,24 @@ export function Header({
 
       <div className="flex items-center gap-4">
         {roomId && (
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={onLeaveRoom}
-            className="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm font-semibold"
-          >
-            Leave Table
-          </motion.button>
+          <>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onCashOut}
+              className="px-4 py-2 rounded-xl bg-neon-blue/20 text-neon-blue hover:bg-neon-blue/30 transition-colors text-sm font-semibold"
+            >
+              Cash Out
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onLeaveRoom}
+              className="px-4 py-2 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm font-semibold"
+            >
+              Leave Table
+            </motion.button>
+          </>
         )}
         <ConnectButton
           showBalance={false}

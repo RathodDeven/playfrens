@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import type { LegalAction, PokerAction } from "@playfrens/shared";
+import { formatYusd } from "../../../lib/format";
 
 const actionStyles: Record<
   PokerAction,
@@ -36,9 +37,11 @@ const actionStyles: Record<
 export function ActionBar({
   legalActions,
   onAction,
+  chipUnit,
 }: {
   legalActions: LegalAction[];
   onAction: (action: PokerAction, betSize?: number) => void;
+  chipUnit: number;
 }) {
   const [betSize, setBetSize] = useState<number>(0);
 
@@ -58,7 +61,7 @@ export function ActionBar({
       {betAction && (
         <div className="flex items-center gap-3 px-4 py-2 rounded-xl glass">
           <span className="text-sm text-white/50 font-mono">
-            {betAction.minBet}
+            {formatYusd((betAction.minBet || 0) * chipUnit)}
           </span>
           <input
             type="range"
@@ -69,7 +72,7 @@ export function ActionBar({
             className="w-40 accent-neon-green"
           />
           <span className="text-sm text-white/50 font-mono">
-            {betAction.maxBet}
+            {formatYusd((betAction.maxBet || 0) * chipUnit)}
           </span>
           <input
             type="number"
@@ -101,7 +104,7 @@ export function ActionBar({
             >
               {style.label}
               {la.action === "call" && la.minBet
-                ? ` ${la.minBet}`
+                ? ` ${formatYusd(la.minBet * chipUnit)}`
                 : ""}
             </motion.button>
           );

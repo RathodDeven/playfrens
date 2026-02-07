@@ -35,13 +35,14 @@ export function App() {
     createRoom,
     joinRoom,
     leaveRoom,
+    cashOut,
     startHand,
     sendAction,
     sendReaction,
     clearError,
   } = useGameState(socket);
 
-  const { balance, refetchBalance } = useYellow(address);
+  const { balance, refetchBalance, requestTokens } = useYellow(address);
 
   // Not connected
   if (!isConnected) {
@@ -73,7 +74,7 @@ export function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header roomId={roomId} onLeaveRoom={leaveRoom} />
+      <Header roomId={roomId} onLeaveRoom={leaveRoom} onCashOut={cashOut} />
 
       {/* Error toast */}
       <AnimatePresence>
@@ -109,7 +110,10 @@ export function App() {
             joinRoom(id, seat);
           }}
           balance={balance}
-          onDeposit={refetchBalance}
+          onDeposit={async () => {
+            await requestTokens();
+            await refetchBalance();
+          }}
         />
       )}
     </div>

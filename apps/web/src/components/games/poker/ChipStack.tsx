@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
+import { formatYusd } from "../../../lib/format";
 
-export function ChipStack({ amount }: { amount: number }) {
+export function ChipStack({ amount, chipUnit }: { amount: number; chipUnit: number }) {
   if (amount === 0) return null;
 
   return (
@@ -11,7 +12,7 @@ export function ChipStack({ amount }: { amount: number }) {
     >
       <div className="w-3 h-3 rounded-full bg-gradient-to-br from-neon-yellow to-yellow-600 border border-yellow-500/50" />
       <span className="text-xs font-bold font-mono text-neon-yellow">
-        {amount}
+        {formatYusd(amount * chipUnit)} ytest.usd
       </span>
     </motion.div>
   );

@@ -2,6 +2,7 @@ import type { Server, Socket } from "socket.io";
 import { EVENTS, type PokerAction } from "@playfrens/shared";
 import type { RoomManager } from "../rooms/RoomManager.js";
 import type { PokerRoom } from "../games/poker/PokerRoom.js";
+import type { YellowSessionManager } from "../yellow/sessionManager.js";
 import {
   registerSocket,
   unregisterSocket,
@@ -11,7 +12,11 @@ import {
 // Track which socket is in which room, and which seat
 const socketRooms = new Map<string, { roomId: string; seatIndex: number }>();
 
-export function setupSocketHandlers(io: Server, roomManager: RoomManager): void {
+export function setupSocketHandlers(
+  io: Server,
+  roomManager: RoomManager,
+  yellowSessions: YellowSessionManager,
+): void {
   io.on("connection", (socket: Socket) => {
     console.log(`[Socket] Connected: ${socket.id}`);
 
@@ -34,6 +39,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager): void 
         smallBlind: number;
         bigBlind: number;
         maxPlayers: number;
+        chipUnit: number;
       }) => {
         try {
           const room = roomManager.createRoom(
@@ -43,6 +49,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager): void 
               smallBlind: data.smallBlind,
               bigBlind: data.bigBlind,
               maxPlayers: data.maxPlayers,
+              chipUnit: data.chipUnit,
             },
             (roomId, result) => {
               // Broadcast hand complete to room
@@ -50,6 +57,13 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager): void 
 
               // Send updated game state to each player
               broadcastGameState(io, roomId, roomManager);
+
+              const room = roomManager.getRoom(roomId) as PokerRoom | undefined;
+              if (room) {
+                yellowSessions
+                  .submitHandAllocations(room)
+                  .catch((err) => console.error("[Yellow] Submit failed:", err));
+              }
             },
           );
 
@@ -68,7 +82,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager): void 
     // Join room
     socket.on(
       EVENTS.JOIN_ROOM,
-      (data: { roomId: string; seatIndex: number }) => {
+      async (data: { roomId: string; seatIndex: number }) => {
         try {
           const address = socket.data.address;
           if (!address) {
@@ -79,6 +93,20 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager): void 
           const room = roomManager.getRoom(data.roomId);
           if (!room) {
             socket.emit(EVENTS.ERROR, { message: "Room not found" });
+            return;
+          }
+
+          if (room.status !== "waiting" || yellowSessions.hasSession(room.roomId)) {
+            socket.emit(EVENTS.ERROR, { message: "Table already started" });
+            return;
+          }
+
+          const requiredDeposit = room.config.buyIn * room.config.chipUnit;
+          const available = await yellowSessions.getBalance(address);
+          if (available < requiredDeposit) {
+            socket.emit(EVENTS.ERROR, {
+              message: "Insufficient Yellow balance for buy-in",
+            });
             return;
           }
 
@@ -119,16 +147,51 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager): void 
 
     // Leave room
     socket.on(EVENTS.LEAVE_ROOM, (data: { roomId: string }) => {
-      handleLeaveRoom(socket, io, roomManager, data.roomId);
+      handleLeaveRoom(socket, io, roomManager, yellowSessions, data.roomId);
+    });
+
+    // Cash out
+    socket.on(EVENTS.CASH_OUT, (data: { roomId: string }) => {
+      const roomInfo = socketRooms.get(socket.id);
+      if (!roomInfo || roomInfo.roomId !== data.roomId) {
+        socket.emit(EVENTS.ERROR, { message: "Not in this room" });
+        return;
+      }
+
+      const room = roomManager.getRoom(data.roomId) as PokerRoom | undefined;
+      if (!room) {
+        socket.emit(EVENTS.ERROR, { message: "Room not found" });
+        return;
+      }
+
+      if (room.getPlayerCount() > 1) {
+        socket.emit(EVENTS.ERROR, {
+          message: "All players must leave before cash out",
+        });
+        return;
+      }
+
+      if (yellowSessions.hasSession(room.roomId)) {
+        yellowSessions
+          .closeSession(room.roomId, room)
+          .catch((err) => console.error("[Yellow] Close failed:", err));
+      }
+
+      socket.emit(EVENTS.CASHED_OUT, { roomId: data.roomId });
+      handleLeaveRoom(socket, io, roomManager, yellowSessions, data.roomId);
     });
 
     // Start hand
-    socket.on(EVENTS.START_HAND, (data: { roomId: string }) => {
+    socket.on(EVENTS.START_HAND, async (data: { roomId: string }) => {
       try {
         const room = roomManager.getRoom(data.roomId);
         if (!room) {
           socket.emit(EVENTS.ERROR, { message: "Room not found" });
           return;
+        }
+
+        if (!yellowSessions.hasSession(room.roomId)) {
+          await yellowSessions.ensureSession(room);
         }
 
         (room as PokerRoom).startHand();
@@ -213,7 +276,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager): void 
     socket.on("disconnect", () => {
       const roomInfo = socketRooms.get(socket.id);
       if (roomInfo) {
-        handleLeaveRoom(socket, io, roomManager, roomInfo.roomId);
+        handleLeaveRoom(socket, io, roomManager, yellowSessions, roomInfo.roomId);
       }
       unregisterSocket(socket.id);
       console.log(`[Socket] Disconnected: ${socket.id}`);
@@ -225,6 +288,7 @@ function handleLeaveRoom(
   socket: Socket,
   io: Server,
   roomManager: RoomManager,
+  yellowSessions: YellowSessionManager,
   roomId: string,
 ): void {
   const roomInfo = socketRooms.get(socket.id);
@@ -240,6 +304,11 @@ function handleLeaveRoom(
 
     // Delete room if empty
     if (room.getPlayerCount() === 0) {
+      if (yellowSessions.hasSession(roomId)) {
+        yellowSessions
+          .closeSession(roomId, room as PokerRoom)
+          .catch((err) => console.error("[Yellow] Close failed:", err));
+      }
       roomManager.deleteRoom(roomId);
       console.log(`[Room] Deleted empty room: ${roomId}`);
     }

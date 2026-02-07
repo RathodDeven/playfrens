@@ -131,6 +131,15 @@ export class YellowClient {
     return result.session_id;
   }
 
+  async getBalance(address: string): Promise<number> {
+    const result = await this.sendRequest("get_balance", { address });
+    const value = Number(result?.balance ?? 0);
+    if (Number.isNaN(value)) {
+      throw new Error("Invalid balance returned from Clearnode");
+    }
+    return value;
+  }
+
   async submitAppState(
     sessionId: string,
     allocations: Record<string, number>,

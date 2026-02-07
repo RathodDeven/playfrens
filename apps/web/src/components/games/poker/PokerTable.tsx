@@ -10,6 +10,7 @@ import { CommunityCards } from "./CommunityCards";
 import { PotDisplay } from "./PotDisplay";
 import { ActionBar } from "./ActionBar";
 import { useEffect, useState } from "react";
+import { formatYusd } from "../../../lib/format";
 
 // Seat positions around an oval table (6 seats)
 const seatPositions = [
@@ -53,6 +54,8 @@ export function PokerTable({
     gameState.isHandInProgress &&
     gameState.currentPlayerSeat === heroSeatIndex;
 
+  const chipUnit = gameState.chipUnit || 1;
+
   const canStartHand = !gameState.isHandInProgress && gameState.seats.length >= 2;
 
   return (
@@ -73,7 +76,7 @@ export function PokerTable({
 
           {/* Pot */}
           <div className="absolute top-[55%] left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <PotDisplay pots={gameState.pots} />
+            <PotDisplay pots={gameState.pots} chipUnit={chipUnit} />
           </div>
 
           {/* Player Seats */}
@@ -92,6 +95,7 @@ export function PokerTable({
                       ? gameState.holeCards
                       : undefined
                   }
+                  chipUnit={chipUnit}
                 />
               </div>
             ))}
@@ -128,7 +132,9 @@ export function PokerTable({
                         ? "You won! Big brain move!"
                         : `Seat ${w.seatIndex} wins!`}
                     </p>
-                    <p className="text-neon-yellow font-mono">+{w.amount}</p>
+                    <p className="text-neon-yellow font-mono">
+                      +{formatYusd(w.amount * chipUnit)} ytest.usd
+                    </p>
                     {w.hand && (
                       <p className="text-white/50 text-sm">{w.hand}</p>
                     )}
@@ -180,6 +186,7 @@ export function PokerTable({
             <ActionBar
               legalActions={gameState.legalActions}
               onAction={onAction}
+              chipUnit={chipUnit}
             />
           )}
 
