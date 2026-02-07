@@ -1,6 +1,6 @@
 import { CONTRACTS } from "@playfrens/shared";
-import { baseSepolia } from "wagmi/chains";
 import { useBalance } from "wagmi";
+import { baseSepolia } from "wagmi/chains";
 
 export function useWalletBalance(address?: `0x${string}`) {
   const { data, isLoading, refetch } = useBalance({

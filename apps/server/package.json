@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@playfrens/shared": "workspace:*",
+    "@erc7824/nitrolite": "^0.5.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "ethers": "^5.7.2",
     "express": "^4.21.1",
     "poker-ts": "^1.1.2",
     "socket.io": "^4.8.1",

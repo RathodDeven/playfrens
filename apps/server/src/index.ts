@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createServer } from "node:http";
 import os from "node:os";
+import { ethers } from "ethers";
 import cors from "cors";
 import express from "express";
 import { Server } from "socket.io";
@@ -59,9 +60,20 @@ if (!privateKey) {
 
 const serverWallet = createServerWallet(privateKey);
 const serverAddress = getServerAddress(privateKey);
+const sessionKey = process.env.SESSION_KEY_PRIVATE_KEY;
+if (!sessionKey) {
+  console.warn(
+    "[Yellow] SESSION_KEY_PRIVATE_KEY not set; generating ephemeral session key",
+  );
+}
+
 const yellowClient = new YellowClient(
   serverWallet,
+  privateKey,
+  sessionKey,
   process.env.CLEARNODE_WS_URL,
+  process.env.CLEARNODE_APPLICATION || "console",
+  process.env.CLEARNODE_SCOPE,
 );
 const yellowSessions = new YellowSessionManager(yellowClient, serverAddress);
 
