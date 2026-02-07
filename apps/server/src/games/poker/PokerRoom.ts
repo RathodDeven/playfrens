@@ -27,6 +27,8 @@ export class PokerRoom extends GameRoom {
   private players: Map<number, SeatedPlayer> = new Map();
   private handNumber = 0;
   private onHandComplete?: (result: HandResult) => void;
+  private pendingLeaves: Set<number> = new Set();
+  private recentlyRemoved: number[] = [];
 
   constructor(
     roomId: string,
@@ -118,6 +120,11 @@ export class PokerRoom extends GameRoom {
       })),
       pots: this.mapPots(),
     };
+
+    const removedSeats = this.finalizePendingLeaves();
+    if (removedSeats.length > 0) {
+      this.recentlyRemoved = removedSeats;
+    }
 
     this.onHandComplete?.(result);
   }
@@ -255,6 +262,56 @@ export class PokerRoom extends GameRoom {
 
   getPlayerCount(): number {
     return this.players.size;
+  }
+
+  isHandInProgress(): boolean {
+    return this.table.isHandInProgress();
+  }
+
+  requestLeave(seatIndex: number): boolean {
+    if (!this.players.has(seatIndex)) return false;
+    if (!this.table.isHandInProgress()) return false;
+
+    this.pendingLeaves.add(seatIndex);
+
+    if (
+      this.table.isBettingRoundInProgress() &&
+      this.table.playerToAct() === seatIndex
+    ) {
+      this.handleAction(seatIndex, "fold");
+    }
+
+    return true;
+  }
+
+  autoFoldPendingTurn(): boolean {
+    if (!this.table.isHandInProgress()) return false;
+    if (!this.table.isBettingRoundInProgress()) return false;
+
+    const seatIndex = this.table.playerToAct();
+    if (!this.pendingLeaves.has(seatIndex)) return false;
+
+    this.handleAction(seatIndex, "fold");
+    return true;
+  }
+
+  consumeRecentlyRemoved(): number[] {
+    const removed = [...this.recentlyRemoved];
+    this.recentlyRemoved = [];
+    return removed;
+  }
+
+  private finalizePendingLeaves(): number[] {
+    if (this.pendingLeaves.size === 0) return [];
+    const removed: number[] = [];
+    for (const seatIndex of this.pendingLeaves) {
+      if (this.players.has(seatIndex)) {
+        this.removePlayer(seatIndex);
+        removed.push(seatIndex);
+      }
+    }
+    this.pendingLeaves.clear();
+    return removed;
   }
 
   getPlayerAddresses(): Map<number, string> {

@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { createServer } from "node:http";
 import os from "node:os";
-import { ethers } from "ethers";
 import cors from "cors";
 import express from "express";
 import { Server } from "socket.io";
@@ -33,8 +32,21 @@ app.get("/yellow/ledger-balance/:address", async (req, res) => {
       return;
     }
 
-    const balance = await yellowSessions.getLedgerBalance(address, asset);
-    res.json({ address, asset, balance: String(balance) });
+    const balances = await yellowSessions.getLedgerBalances(address);
+    if (asset.toLowerCase() === "all") {
+      res.json({ address, balances });
+      return;
+    }
+
+    const match = balances.find(
+      (b) => b.asset?.toLowerCase() === asset.toLowerCase(),
+    );
+    if (!match) {
+      res.json({ address, asset, balance: "0", balances });
+      return;
+    }
+
+    res.json({ address, asset, balance: String(match.amount) });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "Unknown error" });
   }

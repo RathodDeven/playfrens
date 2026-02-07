@@ -1,6 +1,6 @@
 import { EVENTS, type PokerAction } from "@playfrens/shared";
 import type { Server, Socket } from "socket.io";
-import type { PokerRoom } from "../games/poker/PokerRoom.js";
+import { PokerRoom } from "../games/poker/PokerRoom.js";
 import type { RoomManager } from "../rooms/RoomManager.js";
 import type { YellowSessionManager } from "../yellow/sessionManager.js";
 import { registerSocket, unregisterSocket } from "./middleware.js";
@@ -59,6 +59,12 @@ export function setupSocketHandlers(
 
               const room = roomManager.getRoom(roomId) as PokerRoom | undefined;
               if (room) {
+                const removed = room.consumeRecentlyRemoved();
+                for (const seatIndex of removed) {
+                  handleDeferredRemoval(io, roomId, seatIndex);
+                  io.to(roomId).emit(EVENTS.PLAYER_LEFT, { seatIndex });
+                }
+
                 yellowSessions
                   .submitHandAllocations(room)
                   .catch((err) =>
@@ -105,18 +111,6 @@ export function setupSocketHandlers(
             return;
           }
 
-          const requiredDeposit = room.config.buyIn * room.config.chipUnit;
-          const available = await yellowSessions.getLedgerBalance(
-            address,
-            "ytest.usd",
-          );
-          if (available < requiredDeposit) {
-            socket.emit(EVENTS.ERROR, {
-              message: "Insufficient Yellow balance for buy-in",
-            });
-            return;
-          }
-
           room.addPlayer(
             address,
             data.seatIndex,
@@ -154,7 +148,14 @@ export function setupSocketHandlers(
 
     // Leave room
     socket.on(EVENTS.LEAVE_ROOM, (data: { roomId: string }) => {
-      handleLeaveRoom(socket, io, roomManager, yellowSessions, data.roomId);
+      handleLeaveRoom(
+        socket,
+        io,
+        roomManager,
+        yellowSessions,
+        data.roomId,
+        true,
+      );
     });
 
     // Cash out
@@ -202,6 +203,12 @@ export function setupSocketHandlers(
         }
 
         (room as PokerRoom).startHand();
+        autoFoldPendingLeavers(
+          io,
+          data.roomId,
+          roomManager,
+          yellowSessions,
+        );
         broadcastGameState(io, data.roomId, roomManager);
 
         console.log(`[Game] Hand started in ${data.roomId}`);
@@ -231,6 +238,12 @@ export function setupSocketHandlers(
             betSize: data.betSize,
           });
 
+          autoFoldPendingLeavers(
+            io,
+            data.roomId,
+            roomManager,
+            yellowSessions,
+          );
           broadcastGameState(io, data.roomId, roomManager);
 
           console.log(
@@ -289,6 +302,7 @@ export function setupSocketHandlers(
           roomManager,
           yellowSessions,
           roomInfo.roomId,
+          true,
         );
       }
       unregisterSocket(socket.id);
@@ -303,12 +317,20 @@ function handleLeaveRoom(
   roomManager: RoomManager,
   yellowSessions: YellowSessionManager,
   roomId: string,
+  deferIfHandInProgress = false,
 ): void {
   const roomInfo = socketRooms.get(socket.id);
   if (!roomInfo || roomInfo.roomId !== roomId) return;
 
   const room = roomManager.getRoom(roomId);
   if (room) {
+    if (deferIfHandInProgress && room.gameType === "poker") {
+      const pokerRoom = room as PokerRoom;
+      if (pokerRoom.requestLeave(roomInfo.seatIndex)) {
+        return;
+      }
+    }
+
     room.removePlayer(roomInfo.seatIndex);
 
     io.to(roomId).emit(EVENTS.PLAYER_LEFT, {
@@ -329,6 +351,57 @@ function handleLeaveRoom(
 
   socket.leave(roomId);
   socketRooms.delete(socket.id);
+}
+
+function handleDeferredRemoval(
+  io: Server,
+  roomId: string,
+  seatIndex: number,
+): void {
+  const targets: string[] = [];
+  for (const [socketId, info] of socketRooms.entries()) {
+    if (info.roomId === roomId && info.seatIndex === seatIndex) {
+      targets.push(socketId);
+    }
+  }
+
+  for (const socketId of targets) {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket) {
+      socket.leave(roomId);
+    }
+    socketRooms.delete(socketId);
+  }
+}
+
+function autoFoldPendingLeavers(
+  io: Server,
+  roomId: string,
+  roomManager: RoomManager,
+  yellowSessions: YellowSessionManager,
+): void {
+  const room = roomManager.getRoom(roomId);
+  if (!room || room.gameType !== "poker") return;
+
+  const pokerRoom = room as PokerRoom;
+  let didFold = false;
+  while (pokerRoom.autoFoldPendingTurn()) {
+    didFold = true;
+  }
+
+  if (didFold) {
+    broadcastGameState(io, roomId, roomManager);
+
+    const removed = pokerRoom.consumeRecentlyRemoved();
+    for (const seatIndex of removed) {
+      handleDeferredRemoval(io, roomId, seatIndex);
+      io.to(roomId).emit(EVENTS.PLAYER_LEFT, { seatIndex });
+    }
+
+    yellowSessions
+      .submitHandAllocations(pokerRoom)
+      .catch((err) => console.error("[Yellow] Submit failed:", err));
+  }
 }
 
 function broadcastGameState(

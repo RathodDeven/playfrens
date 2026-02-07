@@ -50,6 +50,15 @@ export function useGameState(socket: Socket): UseGameStateReturn {
       setLastHandResult(result);
     }
 
+    function onPlayerLeft(data: { seatIndex: number }) {
+      if (data.seatIndex === seatIndex) {
+        setRoomId(null);
+        setSeatIndex(null);
+        setGameState(null);
+        setLastHandResult(null);
+      }
+    }
+
     function onError(data: { message: string }) {
       setError(data.message);
     }
@@ -64,6 +73,7 @@ export function useGameState(socket: Socket): UseGameStateReturn {
     socket.on(EVENTS.GAME_STATE, onGameState);
     socket.on(EVENTS.ROOM_CREATED, onRoomCreated);
     socket.on(EVENTS.HAND_COMPLETE, onHandComplete);
+    socket.on(EVENTS.PLAYER_LEFT, onPlayerLeft);
     socket.on(EVENTS.ERROR, onError);
     socket.on(EVENTS.CASHED_OUT, onCashedOut);
 
@@ -71,10 +81,11 @@ export function useGameState(socket: Socket): UseGameStateReturn {
       socket.off(EVENTS.GAME_STATE, onGameState);
       socket.off(EVENTS.ROOM_CREATED, onRoomCreated);
       socket.off(EVENTS.HAND_COMPLETE, onHandComplete);
+      socket.off(EVENTS.PLAYER_LEFT, onPlayerLeft);
       socket.off(EVENTS.ERROR, onError);
       socket.off(EVENTS.CASHED_OUT, onCashedOut);
     };
-  }, [socket]);
+  }, [socket, seatIndex]);
 
   const createRoom = useCallback(
     (config: {
@@ -101,10 +112,6 @@ export function useGameState(socket: Socket): UseGameStateReturn {
   const leaveRoom = useCallback(() => {
     if (roomId) {
       socket.emit(EVENTS.LEAVE_ROOM, { roomId });
-      setRoomId(null);
-      setSeatIndex(null);
-      setGameState(null);
-      setLastHandResult(null);
     }
   }, [socket, roomId]);
 

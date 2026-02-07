@@ -60,6 +60,12 @@ export class YellowSessionManager {
     return value;
   }
 
+  async getLedgerBalances(
+    address: string,
+  ): Promise<Array<{ asset: string; amount: string }>> {
+    return this.client.getLedgerBalances(address);
+  }
+
   async ensureSession(room: GameRoom): Promise<RoomSession> {
     const existing = this.sessions.get(room.roomId);
     if (existing) return existing;

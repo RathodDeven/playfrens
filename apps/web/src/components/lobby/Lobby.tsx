@@ -10,6 +10,9 @@ export function Lobby({
   onJoinRoom,
   balance,
   walletBalance,
+  isAuthorized,
+  isAuthorizing,
+  onAuthorize,
   onDeposit,
 }: {
   onCreateRoom: (config: {
@@ -22,6 +25,9 @@ export function Lobby({
   onJoinRoom: (roomId: string, seatIndex: number) => void;
   balance: string;
   walletBalance: string;
+  isAuthorized: boolean;
+  isAuthorizing: boolean;
+  onAuthorize: () => Promise<void>;
   onDeposit: () => Promise<void>;
 }) {
   const [joinCode, setJoinCode] = useState("");
@@ -81,14 +87,36 @@ export function Lobby({
               </p>
             </div>
           </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowDeposit(true)}
-            className="px-5 py-2.5 rounded-xl bg-neon-green/20 text-neon-green font-semibold hover:bg-neon-green/30 transition-colors"
-          >
-            Get Tokens
-          </motion.button>
+          <div className="flex flex-col items-end gap-2">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={async () => {
+                if (!isAuthorized) {
+                  await onAuthorize();
+                }
+              }}
+              className={
+                isAuthorized
+                  ? "px-4 py-2 rounded-xl bg-neon-blue/20 text-neon-blue font-semibold"
+                  : "px-4 py-2 rounded-xl bg-neon-blue/10 text-neon-blue font-semibold hover:bg-neon-blue/20 transition-colors"
+              }
+            >
+              {isAuthorizing
+                ? "Authorizing..."
+                : isAuthorized
+                  ? "Authorized"
+                  : "Authorize Yellow"}
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowDeposit(true)}
+              className="px-5 py-2.5 rounded-xl bg-neon-green/20 text-neon-green font-semibold hover:bg-neon-green/30 transition-colors"
+            >
+              Get Tokens
+            </motion.button>
+          </div>
         </motion.div>
 
         {/* Create Room */}
@@ -162,7 +190,8 @@ export function Lobby({
                 chipUnit,
               })
             }
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-neon-pink to-neon-purple text-white font-bold text-lg hover:brightness-110 transition-all"
+            disabled={!isAuthorized}
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-neon-pink to-neon-purple text-white font-bold text-lg hover:brightness-110 transition-all disabled:opacity-40"
           >
             Create Table
           </motion.button>
@@ -188,7 +217,7 @@ export function Lobby({
                   onJoinRoom(joinCode, 1);
                 }
               }}
-              disabled={joinCode.length !== 6}
+              disabled={joinCode.length !== 6 || !isAuthorized}
               className="px-8 py-3 rounded-xl bg-neon-blue/20 text-neon-blue font-bold hover:bg-neon-blue/30 transition-colors disabled:opacity-30"
             >
               Join

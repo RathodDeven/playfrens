@@ -286,11 +286,9 @@ export class YellowClient {
       scope: this.application,
     };
 
-    const signer = createEIP712AuthMessageSigner(
-      this.wallet,
-      authParams,
-      { name: this.application },
-    );
+    const signer = createEIP712AuthMessageSigner(this.wallet, authParams, {
+      name: this.application,
+    });
 
     console.log("[Yellow] Signing auth challenge", challenge);
 
@@ -317,13 +315,13 @@ export class YellowClient {
       const id = ++this.requestId;
       const timestamp = Date.now();
       const req = [id, method, params, timestamp];
-        const payload = { req } as { req: unknown[]; sig?: string[] };
-        const message = JSON.stringify(payload);
+      const payload = { req } as { req: unknown[]; sig?: string[] };
+      const message = JSON.stringify(payload);
       const digestHex = ethers.utils.id(message);
       const messageBytes = ethers.utils.arrayify(digestHex);
-        const signature = this.sessionSigner
-          ._signingKey()
-          .signDigest(messageBytes);
+      const signature = this.sessionSigner
+        ._signingKey()
+        .signDigest(messageBytes);
       payload.sig = [ethers.utils.joinSignature(signature)];
 
       this.pendingRequests.set(id, { resolve, reject });

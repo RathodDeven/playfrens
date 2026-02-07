@@ -43,7 +43,14 @@ export function App() {
     clearError,
   } = useGameState(socket);
 
-  const { balance, refetchBalance, requestTokens } = useYellow(address);
+  const {
+    balance,
+    isAuthorized,
+    isAuthorizing,
+    authorize,
+    refetchBalance,
+    requestTokens,
+  } = useYellow(address);
   const { balance: walletBalance } = useWalletBalance(address);
 
   // Not connected
@@ -113,6 +120,12 @@ export function App() {
           }}
           balance={balance}
           walletBalance={walletBalance}
+          isAuthorized={isAuthorized}
+          isAuthorizing={isAuthorizing}
+          onAuthorize={async () => {
+            await authorize();
+            await refetchBalance();
+          }}
           onDeposit={async () => {
             await requestTokens();
             await refetchBalance();
