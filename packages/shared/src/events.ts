@@ -17,6 +17,12 @@ export const EVENTS = {
   ACTION_REQUIRED: "action-required",
   HAND_COMPLETE: "hand-complete",
 
+  // Yellow Network session signing
+  SIGN_SESSION_REQUEST: "sign-session-request",
+  SESSION_SIGNED: "session-signed",
+  SESSION_READY: "session-ready",
+  SESSION_ERROR: "session-error",
+
   // Social
   SEND_REACTION: "send-reaction",
   REACTION: "reaction",

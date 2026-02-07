@@ -53,39 +53,10 @@ export function ActionBar({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center gap-3"
+      className="flex items-center gap-3"
     >
-      {/* Bet slider */}
-      {betAction && (
-        <div className="flex items-center gap-3 px-4 py-2 rounded-xl glass">
-          <span className="text-sm text-white/50 font-mono">
-            {betAction.minBet || 0}
-          </span>
-          <input
-            type="range"
-            min={betAction.minBet || 0}
-            max={betAction.maxBet || 1000}
-            value={betSize || betAction.minBet || 0}
-            onChange={(e) => setBetSize(Number(e.target.value))}
-            className="w-40 accent-neon-green"
-          />
-          <span className="text-sm text-white/50 font-mono">
-            {betAction.maxBet || 0}
-          </span>
-          <input
-            type="number"
-            value={betSize || betAction.minBet || 0}
-            onChange={(e) => setBetSize(Number(e.target.value))}
-            className="w-20 px-2 py-1 rounded-lg bg-surface-light border border-white/10 text-white text-center text-sm font-mono"
-          />
-          <span className="text-xs text-white/30">
-            ({formatYusd((betSize || betAction.minBet || 0) * chipUnit)})
-          </span>
-        </div>
-      )}
-
       {/* Action buttons */}
       <div className="flex gap-2">
         {legalActions.map((la) => {
@@ -103,16 +74,39 @@ export function ActionBar({
                   onAction(la.action);
                 }
               }}
-              className={`px-6 py-3 rounded-xl font-bold ${style.bg} ${style.text} transition-colors`}
+              className={`px-5 py-2.5 rounded-xl font-bold text-sm ${style.bg} ${style.text} transition-colors`}
             >
               {style.label}
               {la.action === "call" && la.minBet
-                ? ` ${la.minBet} (${formatYusd(la.minBet * chipUnit)})`
+                ? ` ${la.minBet}`
                 : ""}
             </motion.button>
           );
         })}
       </div>
+
+      {/* Bet slider — compact inline */}
+      {betAction && (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass">
+          <input
+            type="range"
+            min={betAction.minBet || 0}
+            max={betAction.maxBet || 1000}
+            value={betSize || betAction.minBet || 0}
+            onChange={(e) => setBetSize(Number(e.target.value))}
+            className="w-28 accent-neon-green"
+          />
+          <input
+            type="number"
+            value={betSize || betAction.minBet || 0}
+            onChange={(e) => setBetSize(Number(e.target.value))}
+            className="w-16 px-2 py-1 rounded-lg bg-surface-light border border-white/10 text-white text-center text-xs font-mono"
+          />
+          <span className="text-[10px] text-white/30 whitespace-nowrap">
+            {formatYusd((betSize || betAction.minBet || 0) * chipUnit)}
+          </span>
+        </div>
+      )}
     </motion.div>
   );
 }

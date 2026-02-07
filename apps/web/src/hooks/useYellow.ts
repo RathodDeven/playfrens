@@ -102,6 +102,7 @@ export function useYellow(address?: string) {
   }, [fetchBalance, client, isAuthorized]);
 
   return {
+    client,
     balance,
     isLoading,
     isAuthorized,

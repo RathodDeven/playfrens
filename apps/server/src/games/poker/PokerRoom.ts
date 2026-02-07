@@ -29,6 +29,8 @@ export class PokerRoom extends GameRoom {
   private onHandComplete?: (result: HandResult) => void;
   private pendingLeaves: Set<number> = new Set();
   private recentlyRemoved: number[] = [];
+  private lastActions: Map<number, { action: string; amount?: number }> = new Map();
+  private foldedSeats: Set<number> = new Set();
 
   constructor(
     roomId: string,
@@ -81,6 +83,11 @@ export class PokerRoom extends GameRoom {
     this.table.startHand();
     this.status = "playing";
     this.handNumber++;
+    this.lastActions.clear();
+    this.foldedSeats.clear();
+
+    console.log(`[Poker] Hand #${this.handNumber} started — players: ${[...this.players.entries()].map(([s, p]) => `seat${s}=${p.address.slice(0,8)}`).join(', ')}`);
+    console.log(`[Poker] Stacks: ${[...this.getChipCounts().entries()].map(([s, c]) => `seat${s}=${c}`).join(', ')}`);
   }
 
   handleAction(seatIndex: number, action: PokerAction, data?: unknown): void {
@@ -97,16 +104,100 @@ export class PokerRoom extends GameRoom {
         ? (data as { betSize: number }).betSize
         : undefined;
 
+    // Get call amount before action is taken (for display purposes)
+    let actionAmount = betSize;
+    if (action === 'call' && !actionAmount) {
+      try {
+        const legal = this.table.legalActions();
+        actionAmount = legal.chipRange?.min;
+      } catch { /* ignore */ }
+    }
+
+    // Track the action for display
+    this.lastActions.set(seatIndex, {
+      action,
+      amount: actionAmount,
+    });
+
+    // Track folds explicitly for winner detection
+    if (action === 'fold') {
+      this.foldedSeats.add(seatIndex);
+    }
+
+    console.log(`[Poker] Action: seat${seatIndex} → ${action}${betSize ? ` (${betSize})` : ''} | pot before: ${this.calculateTotalPot()}`);
+
     this.table.actionTaken(action, betSize);
 
-    // Check if betting round is over
-    if (!this.table.isBettingRoundInProgress()) {
-      if (this.table.areBettingRoundsCompleted()) {
-        this.table.showdown();
-        this.handleHandComplete();
-      } else {
-        this.table.endBettingRound();
+    console.log(`[Poker] After action — isHandInProgress=${this.table.isHandInProgress()}, isBettingRoundInProgress=${this.table.isHandInProgress() ? this.table.isBettingRoundInProgress() : 'N/A'}, pot: ${this.calculateTotalPot()}`);
+
+    // poker-ts game loop: keep advancing until hand is over or waiting for player
+    this.advanceGameState();
+  }
+
+  /** Advance through poker-ts states: endBettingRound → showdown as needed */
+  private advanceGameState(): void {
+    // Loop because endBettingRound may immediately complete (e.g., fold-win)
+    while (this.table.isHandInProgress()) {
+      if (this.table.isBettingRoundInProgress()) {
+        // Waiting for a player action — stop advancing
+        return;
       }
+
+      // Capture fold-win info BEFORE showdown (winners() is empty for fold-wins)
+      if (this.table.areBettingRoundsCompleted()) {
+        console.log(`[Poker] Betting rounds completed — pot: ${this.calculateTotalPot()}, pots: ${JSON.stringify(this.safeGetPots())}`);
+        this.captureWinnerBeforeShowdown();
+        this.table.showdown();
+        // showdown sets isHandInProgress to false — loop will exit
+      } else {
+        console.log(`[Poker] Ending betting round — pot before: ${this.calculateTotalPot()}`);
+        this.table.endBettingRound();
+        console.log(`[Poker] Betting round ended — pot after: ${this.calculateTotalPot()}`);
+      }
+    }
+
+    // Hand is over
+    this.handleHandComplete();
+  }
+
+  /**
+   * For fold-wins, winners() returns empty after showdown.
+   * Capture the sole eligible player from pots before showdown.
+   */
+  private foldWinnerCache: { seatIndex: number; amount: number } | null = null;
+
+  private captureWinnerBeforeShowdown(): void {
+    this.foldWinnerCache = null;
+    try {
+      const pots = this.table.pots();
+      const potTotal = pots.reduce((sum: number, p: any) => sum + (p.size || 0), 0);
+      const totalWithBets = this.calculateTotalPot();
+      // Use the larger of pot sizes vs pot+bets (bets may not be gathered yet)
+      const amount = Math.max(potTotal, totalWithBets);
+
+      console.log(`[Poker] captureWinner: pots=${JSON.stringify(pots.map(p => ({ size: p.size, eligible: p.eligiblePlayers })))}, potTotal=${potTotal}, totalWithBets=${totalWithBets}, amount=${amount}`);
+
+      if (pots.length >= 1 && pots[0].eligiblePlayers?.length === 1) {
+        this.foldWinnerCache = {
+          seatIndex: pots[0].eligiblePlayers[0],
+          amount,
+        };
+        console.log(`[Poker] Fold-win cached: seat ${this.foldWinnerCache.seatIndex} wins ${amount}`);
+      } else {
+        // Check if only one non-folded player (fold-win that pots didn't capture)
+        const activePlayers: number[] = [];
+        for (const [seatIdx] of this.players) {
+          if (!this.foldedSeats.has(seatIdx)) {
+            activePlayers.push(seatIdx);
+          }
+        }
+        if (activePlayers.length === 1) {
+          this.foldWinnerCache = { seatIndex: activePlayers[0], amount };
+          console.log(`[Poker] Fold-win cached (active scan): seat ${activePlayers[0]} wins ${amount}`);
+        }
+      }
+    } catch (err) {
+      console.error('[Poker] captureWinnerBeforeShowdown error:', err);
     }
   }
 
@@ -122,13 +213,48 @@ export class PokerRoom extends GameRoom {
   }
 
   private handleHandComplete(): void {
-    const winners = this.table.winners();
+    let winnerData: any[] = [];
+    try {
+      winnerData = this.table.winners();
+      console.log(`[Poker] winners() returned: ${JSON.stringify(winnerData)}`);
+    } catch (err) {
+      console.log(`[Poker] winners() threw: ${err}`);
+    }
+
+    // For fold-wins, winners() returns empty — use cached info
+    if ((!winnerData || winnerData.length === 0) && this.foldWinnerCache) {
+      winnerData = [this.foldWinnerCache];
+      this.foldWinnerCache = null;
+      console.log(`[Poker] Using foldWinnerCache: ${JSON.stringify(winnerData)}`);
+    }
+
+    // Fallback: find winner using our foldedSeats tracking
+    if (!winnerData || winnerData.length === 0) {
+      const totalPot = this.calculateTotalPot();
+      for (const [seatIndex] of this.players) {
+        if (!this.foldedSeats.has(seatIndex)) {
+          winnerData = [{ seatIndex, amount: totalPot }];
+          console.log(`[Poker] Fold-win fallback: seat ${seatIndex} wins ${totalPot}`);
+          break;
+        }
+      }
+    }
+
+    // Log final chip counts
+    console.log(`[Poker] Hand #${this.handNumber} complete — stacks: ${[...this.getChipCounts().entries()].map(([s, c]) => `seat${s}=${c}`).join(', ')}`);
+    console.log(`[Poker] Winners: ${JSON.stringify(winnerData.map((w: any) => ({ seat: w.seatIndex, amount: w.amount, hand: w.hand?.name })))}`);
+
     const result: HandResult = {
-      winners: winners.map((w: any) => ({
-        seatIndex: w.seatIndex,
-        amount: w.amount,
-        hand: w.hand?.name,
-      })),
+      winners: winnerData.map((w: any) => {
+        const player = this.players.get(w.seatIndex);
+        return {
+          seatIndex: w.seatIndex,
+          amount: w.amount,
+          hand: w.hand?.name,
+          address: player?.address,
+          ensName: player?.ensName,
+        };
+      }),
       pots: this.mapPots(),
       handNumber: this.handNumber,
       chipUnit: this.config.chipUnit,
@@ -140,6 +266,29 @@ export class PokerRoom extends GameRoom {
     }
 
     this.onHandComplete?.(result);
+  }
+
+  /** Calculate total pot including ungathered bets (bets not yet in pot) */
+  private calculateTotalPot(): number {
+    let total = 0;
+    try {
+      total += this.table.pots().reduce((sum: number, p: any) => sum + (p.size || 0), 0);
+    } catch { /* no pots yet */ }
+    try {
+      const seats = this.table.seats();
+      for (let i = 0; i < seats.length; i++) {
+        if (seats[i]) {
+          total += (seats[i] as any).betSize ?? 0;
+        }
+      }
+    } catch { /* ignore */ }
+    return total;
+  }
+
+  private safeGetPots(): any[] {
+    try {
+      return this.table.pots().map((p: any) => ({ size: p.size, eligible: p.eligiblePlayers }));
+    } catch { return []; }
   }
 
   private mapPots(): PotInfo[] {
@@ -181,10 +330,10 @@ export class PokerRoom extends GameRoom {
           ? this.table.button() === i
           : false,
         isTurn:
-          this.table.isHandInProgress() &&
-          this.table.isBettingRoundInProgress()
+          this.table.isHandInProgress() && this.table.isBettingRoundInProgress()
             ? this.table.playerToAct() === i
             : false,
+        lastAction: this.lastActions.get(i) as SeatState['lastAction'],
       });
     }
 
@@ -268,7 +417,7 @@ export class PokerRoom extends GameRoom {
           action: "raise",
           minBet: legal.chipRange?.min,
           maxBet: legal.chipRange?.max,
-      });
+        });
       }
     }
     return actions;

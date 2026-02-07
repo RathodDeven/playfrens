@@ -84,7 +84,7 @@ const yellowClient = new YellowClient(
   privateKey,
   sessionKey,
   process.env.CLEARNODE_WS_URL,
-  process.env.CLEARNODE_APPLICATION || "console",
+  process.env.CLEARNODE_APPLICATION || "PlayFrens",
   process.env.CLEARNODE_SCOPE,
 );
 const yellowSessions = new YellowSessionManager(yellowClient, serverAddress);

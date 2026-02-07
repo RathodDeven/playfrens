@@ -20,21 +20,25 @@ export function PotDisplay({
         animate={{ opacity: 1, scale: 1 }}
         className="flex flex-col items-center gap-1"
       >
-        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-neon-yellow/20 border border-neon-yellow/30">
+        <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-black/40 border border-neon-yellow/40 backdrop-blur-sm shadow-lg">
           <ChipIcon />
-          <span className="font-bold text-neon-yellow font-mono">
-            {totalPot} chips ({formatYusd(totalPot * chipUnit)})
-          </span>
+          <div className="flex flex-col items-center leading-tight">
+            <span className="font-bold text-neon-yellow font-mono text-base">
+              {totalPot} chips
+            </span>
+            <span className="text-white/50 font-mono text-xs">
+              {formatYusd(totalPot * chipUnit)} ytest.usd
+            </span>
+          </div>
         </div>
         {pots.length > 1 && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 mt-1">
             {pots.map((pot, i) => (
               <span
                 key={`pot-${pot.amount}-${i}`}
-                className="text-xs text-white/40"
+                className="text-xs text-white/40 px-2 py-0.5 rounded bg-white/5"
               >
-                {i === 0 ? "Main" : `Side ${i}`}: {pot.amount} (
-                {formatYusd(pot.amount * chipUnit)})
+                {i === 0 ? "Main" : `Side ${i}`}: {pot.amount}
               </span>
             ))}
           </div>

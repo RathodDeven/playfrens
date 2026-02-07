@@ -1,5 +1,5 @@
-import { motion } from "motion/react";
 import type { PokerCard } from "@playfrens/shared";
+import { motion } from "motion/react";
 
 const suitSymbols: Record<string, string> = {
   spades: "\u2660",
@@ -52,15 +52,21 @@ export function Card({
           {card && (
             <>
               {/* Top-left rank + suit */}
-              <span className={`absolute top-1 left-1.5 text-[10px] font-bold leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}>
+              <span
+                className={`absolute top-1 left-1.5 text-[10px] font-bold leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}
+              >
                 {displayRank(card.rank)}
                 {suitSymbols[card.suit] ?? "?"}
               </span>
               {/* Center */}
-              <span className={`text-2xl leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}>
+              <span
+                className={`text-2xl leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}
+              >
                 {suitSymbols[card.suit] ?? "?"}
               </span>
-              <span className={`text-sm font-bold leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}>
+              <span
+                className={`text-sm font-bold leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}
+              >
                 {displayRank(card.rank)}
               </span>
             </>

@@ -35,6 +35,10 @@ export interface SeatState {
   isDealer: boolean;
   isTurn: boolean;
   holeCards?: PokerCard[];
+  lastAction?: {
+    action: PokerAction;
+    amount?: number;
+  };
 }
 
 export interface PotInfo {
@@ -70,6 +74,8 @@ export interface HandResult {
     seatIndex: number;
     amount: number;
     hand?: string;
+    address?: string;
+    ensName?: string;
   }>;
   pots: PotInfo[];
   handNumber?: number;

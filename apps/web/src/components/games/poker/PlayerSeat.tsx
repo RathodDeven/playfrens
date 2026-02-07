@@ -1,8 +1,24 @@
-import type { PokerCard, SeatState } from "@playfrens/shared";
+import type { PokerAction, PokerCard, SeatState } from "@playfrens/shared";
 import { motion } from "motion/react";
 import { formatYusd } from "../../../lib/format";
 import { Card } from "./Card";
 import { ChipStack } from "./ChipStack";
+
+const actionBadgeStyle: Record<string, string> = {
+  fold: 'text-white bg-red-500 shadow-red-500/40',
+  check: 'text-white bg-blue-500 shadow-blue-500/40',
+  call: 'text-white bg-green-500 shadow-green-500/40',
+  bet: 'text-black bg-neon-yellow shadow-neon-yellow/40',
+  raise: 'text-white bg-neon-pink shadow-neon-pink/40',
+};
+
+function formatAction(action: string, amount?: number): string {
+  const label = action.charAt(0).toUpperCase() + action.slice(1);
+  if (amount && (action === 'bet' || action === 'raise' || action === 'call')) {
+    return `${label} ${amount}`;
+  }
+  return label;
+}
 
 export function PlayerSeat({
   seat,
@@ -102,11 +118,18 @@ export function PlayerSeat({
           {formatYusd(seat.chipCount * chipUnit)} ytest.usd
         </p>
 
-        {/* Folded badge */}
-        {seat.isFolded && isHandInProgress && (
-          <span className="absolute -top-1 -left-1 text-[9px] font-bold text-red-400 bg-red-500/20 rounded px-1">
-            FOLD
-          </span>
+        {/* Last action badge */}
+        {seat.lastAction && isHandInProgress && (
+          <motion.div
+            key={`${seat.lastAction.action}-${seat.lastAction.amount}`}
+            initial={{ opacity: 0, scale: 0.5, y: 4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] font-bold rounded-full px-2.5 py-0.5 whitespace-nowrap shadow-md ${
+              actionBadgeStyle[seat.lastAction.action] || 'text-white bg-white/20'
+            }`}
+          >
+            {formatAction(seat.lastAction.action, seat.lastAction.amount)}
+          </motion.div>
         )}
 
         {/* Dealer button */}

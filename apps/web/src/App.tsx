@@ -31,12 +31,23 @@ export function App() {
   );
 
   const {
+    client,
+    balance,
+    isAuthorized,
+    authError,
+    retryAuth,
+    refetchBalance,
+    requestTokens,
+  } = useYellow(address);
+
+  const {
     gameState,
     lastHandResult,
     handHistory,
     roomId,
     seatIndex,
     error,
+    isSigningSession,
     createRoom,
     joinRoom,
     leaveRoom,
@@ -45,16 +56,7 @@ export function App() {
     sendAction,
     sendReaction,
     clearError,
-  } = useGameState(socket);
-
-  const {
-    balance,
-    isAuthorized,
-    authError,
-    retryAuth,
-    refetchBalance,
-    requestTokens,
-  } = useYellow(address);
+  } = useGameState(socket, client, address);
   const { balance: walletBalance, refetch: refetchWallet } =
     useWalletBalance(address);
   const {
@@ -134,7 +136,11 @@ export function App() {
               </p>
               <motion.div
                 animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+                transition={{
+                  duration: 1,
+                  repeat: Number.POSITIVE_INFINITY,
+                  ease: "linear",
+                }}
                 className="w-8 h-8 border-2 border-neon-blue border-t-transparent rounded-full mx-auto"
               />
             </>
@@ -146,7 +152,7 @@ export function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header roomId={roomId} onLeaveRoom={leaveRoom} onCashOut={cashOut} />
+      <Header roomId={roomId} onLeaveRoom={leaveRoom} />
 
       {/* Main content */}
       {roomId && gameState ? (
@@ -157,7 +163,7 @@ export function App() {
           heroSeatIndex={seatIndex ?? 0}
           onAction={sendAction}
           onStartHand={startHand}
-          onReaction={sendReaction}
+          isSigningSession={isSigningSession}
         />
       ) : (
         <Lobby

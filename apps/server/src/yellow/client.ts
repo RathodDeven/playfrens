@@ -1,5 +1,6 @@
 import {
   RPCMethod,
+  RPCProtocolVersion,
   createAppSessionMessage,
   createAuthRequestMessage,
   createAuthVerifyMessageFromChallenge,
@@ -7,6 +8,7 @@ import {
   createECDSAMessageSigner,
   createEIP712AuthMessageSigner,
   createGetLedgerBalancesMessage,
+  createSubmitAppStateMessage,
 } from "@erc7824/nitrolite";
 import { CLEARNODE_WS_URL } from "@playfrens/shared";
 import type { Address, Hex, WalletClient } from "viem";
@@ -235,6 +237,14 @@ export class YellowClient {
   }
 
   private handleMessage(msg: any): void {
+    // Log all incoming messages for debugging
+    if (msg.res && Array.isArray(msg.res)) {
+      const method = msg.res[1];
+      if (method !== RPCMethod.Ping && method !== RPCMethod.Pong) {
+        console.log(`[Yellow] WS received: method=${method}, data=${JSON.stringify(msg.res[2]).slice(0, 200)}`);
+      }
+    }
+
     // Handle response to pending request
     if (msg.res && Array.isArray(msg.res)) {
       const [_requestId, method, result] = msg.res;
@@ -327,7 +337,11 @@ export class YellowClient {
   /**
    * Send a pre-signed message and wait for a specific method response.
    */
-  private sendAndWait(signedMessage: string, waitMethod: string, timeoutMs = 15000): Promise<any> {
+  private sendAndWait(
+    signedMessage: string,
+    waitMethod: string,
+    timeoutMs = 15000,
+  ): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error("WebSocket not connected"));
@@ -355,7 +369,70 @@ export class YellowClient {
   }
 
   /**
-   * Create an app session using the SDK helper.
+   * Prepare an app session request: create the RPC message, sign it with
+   * the server's session key, and return the raw `req` array + server signature.
+   * Does NOT send anything to Clearnode.
+   */
+  async prepareAppSessionRequest(
+    definition: AppSessionDefinition,
+    allocations: AppSessionAllocation[],
+  ): Promise<{ req: any[]; serverSig: string }> {
+    await this.ensureConnected();
+    if (!this.authenticated) {
+      throw new Error("Not authenticated with Clearnode");
+    }
+
+    const signedMessage = await createAppSessionMessage(this.sessionSigner, {
+      definition: {
+        protocol: definition.protocol as any,
+        participants: definition.participants as `0x${string}`[],
+        weights: definition.weights,
+        quorum: definition.quorum,
+        challenge: definition.challenge,
+        nonce: definition.nonce,
+        application: definition.application,
+      },
+      allocations: allocations.map((a) => ({
+        participant: a.participant as Address,
+        asset: a.asset,
+        amount: a.amount,
+      })),
+    });
+
+    const parsed = JSON.parse(signedMessage);
+    console.log("[Yellow] Prepared app session request, server signed");
+    return { req: parsed.req, serverSig: parsed.sig[0] };
+  }
+
+  /**
+   * Submit a multi-sig app session creation message.
+   * All signatures must be bundled in a single `{ req, sig: [...] }` message.
+   */
+  async submitMultiSigSession(
+    req: any[],
+    signatures: string[],
+  ): Promise<string> {
+    await this.ensureConnected();
+    if (!this.authenticated) {
+      throw new Error("Not authenticated with Clearnode");
+    }
+
+    const assembled = JSON.stringify({ req, sig: signatures });
+    console.log(`[Yellow] Submitting multi-sig app session with ${signatures.length} signatures`);
+
+    const result = await this.sendAndWait(assembled, "create_app_session", 15000);
+    console.log("[Yellow] create_app_session multi-sig response:", JSON.stringify(result));
+    const sessionData = Array.isArray(result) ? result[0] : result;
+    const sessionId = sessionData?.app_session_id;
+    if (!sessionId) {
+      throw new Error("No app_session_id returned from Clearnode");
+    }
+    console.log("[Yellow] App session created (multi-sig):", sessionId);
+    return sessionId;
+  }
+
+  /**
+   * Create an app session using the SDK helper (single-signer, legacy).
    * Returns the app_session_id.
    */
   async createAppSession(
@@ -367,18 +444,54 @@ export class YellowClient {
       throw new Error("Not authenticated with Clearnode");
     }
 
-    const signedMessage = await createAppSessionMessage(
+    const signedMessage = await createAppSessionMessage(this.sessionSigner, {
+      definition: {
+        protocol: definition.protocol as any,
+        participants: definition.participants as `0x${string}`[],
+        weights: definition.weights,
+        quorum: definition.quorum,
+        challenge: definition.challenge,
+        nonce: definition.nonce,
+        application: definition.application,
+      },
+      allocations: allocations.map((a) => ({
+        participant: a.participant as Address,
+        asset: a.asset,
+        amount: a.amount,
+      })),
+    });
+
+    console.log("[Yellow] Creating app session with definition:", JSON.stringify(definition));
+    console.log("[Yellow] Initial allocations:", allocations.map(a => `${a.participant.slice(0,10)}: ${a.amount} ${a.asset}`).join(", "));
+
+    const result = await this.sendAndWait(signedMessage, "create_app_session");
+    console.log("[Yellow] create_app_session response:", JSON.stringify(result));
+    const sessionData = Array.isArray(result) ? result[0] : result;
+    const sessionId = sessionData?.app_session_id;
+    if (!sessionId) {
+      throw new Error("No app_session_id returned from Clearnode");
+    }
+    console.log("[Yellow] App session created:", sessionId);
+    return sessionId;
+  }
+
+  /**
+   * Submit intermediate app state (allocations) after each hand.
+   * Uses NitroRPC/0.2 submit_app_state to update Clearnode with current chip distribution.
+   */
+  async submitAppState(
+    sessionId: string,
+    allocations: AppSessionAllocation[],
+  ): Promise<void> {
+    await this.ensureConnected();
+    if (!this.authenticated) {
+      throw new Error("Not authenticated with Clearnode");
+    }
+
+    const signedMessage = await createSubmitAppStateMessage<typeof RPCProtocolVersion.NitroRPC_0_2>(
       this.sessionSigner,
       {
-        definition: {
-          protocol: definition.protocol as any,
-          participants: definition.participants as `0x${string}`[],
-          weights: definition.weights,
-          quorum: definition.quorum,
-          challenge: definition.challenge,
-          nonce: definition.nonce,
-          application: definition.application,
-        },
+        app_session_id: sessionId as `0x${string}`,
         allocations: allocations.map((a) => ({
           participant: a.participant as Address,
           asset: a.asset,
@@ -387,14 +500,9 @@ export class YellowClient {
       },
     );
 
-    const result = await this.sendAndWait(signedMessage, "create_app_session");
-    const sessionData = Array.isArray(result) ? result[0] : result;
-    const sessionId = sessionData?.app_session_id;
-    if (!sessionId) {
-      throw new Error("No app_session_id returned from Clearnode");
-    }
-    console.log("[Yellow] App session created:", sessionId);
-    return sessionId;
+    console.log("[Yellow] Submitting app state for session:", sessionId, "allocations:", allocations.map(a => `${a.participant.slice(0,10)}: ${a.amount}`).join(", "));
+    const result = await this.sendAndWait(signedMessage, "submit_app_state");
+    console.log("[Yellow] submit_app_state response:", JSON.stringify(result));
   }
 
   /**
@@ -421,8 +529,9 @@ export class YellowClient {
       },
     );
 
-    await this.sendAndWait(signedMessage, "close_app_session");
-    console.log("[Yellow] App session closed:", sessionId);
+    console.log("[Yellow] Closing app session:", sessionId, "allocations:", allocations.map(a => `${a.participant.slice(0,10)}: ${a.amount}`).join(", "));
+    const result = await this.sendAndWait(signedMessage, "close_app_session");
+    console.log("[Yellow] close_app_session response:", JSON.stringify(result));
   }
 
   async getBalance(address: string): Promise<number> {

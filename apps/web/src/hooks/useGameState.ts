@@ -6,6 +6,7 @@ import {
 } from "@playfrens/shared";
 import { useCallback, useEffect, useState } from "react";
 import type { Socket } from "socket.io-client";
+import type { YellowRpcClient } from "../lib/yellowRpc";
 
 export interface HandHistoryEntry {
   handNumber: number;
@@ -22,6 +23,7 @@ interface UseGameStateReturn {
   roomId: string | null;
   seatIndex: number | null;
   error: string | null;
+  isSigningSession: boolean;
   createRoom: (config: {
     buyIn: number;
     smallBlind: number;
@@ -39,13 +41,18 @@ interface UseGameStateReturn {
   clearError: () => void;
 }
 
-export function useGameState(socket: Socket): UseGameStateReturn {
+export function useGameState(
+  socket: Socket,
+  yellowClient: YellowRpcClient | null,
+  address?: string,
+): UseGameStateReturn {
   const [gameState, setGameState] = useState<PokerPlayerState | null>(null);
   const [lastHandResult, setLastHandResult] = useState<HandResult | null>(null);
   const [handHistory, setHandHistory] = useState<HandHistoryEntry[]>([]);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [seatIndex, setSeatIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSigningSession, setIsSigningSession] = useState(false);
   // Track pending join so we know when to extract seatIndex from PLAYER_JOINED
   const [, setPendingJoin] = useState(false);
 
@@ -53,13 +60,14 @@ export function useGameState(socket: Socket): UseGameStateReturn {
     function onGameState(state: PokerPlayerState) {
       setGameState(state);
 
+      // Clear hand result when a new hand starts so overlay hides
+      if (state.isHandInProgress) {
+        setLastHandResult(null);
+      }
+
       // If we just joined and are waiting for our seat assignment
       setPendingJoin((pending) => {
         if (pending) {
-          // Find our seat — server sends personalized state, so we can detect
-          // the seat that was assigned by looking at the state
-          // The server assigns us a seat and broadcasts state for that seat
-          // Our seatIndex comes from ROOM_CREATED or PLAYER_JOINED
           return false;
         }
         return pending;
@@ -86,6 +94,9 @@ export function useGameState(socket: Socket): UseGameStateReturn {
 
     function onHandComplete(result: HandResult) {
       setLastHandResult(result);
+
+      // Auto-clear after 6s as fallback (in case auto-start fails)
+      setTimeout(() => setLastHandResult(null), 6000);
 
       // Add to hand history if it has a hand number (real hand result, not start signal)
       if (result.handNumber && result.winners?.length > 0) {
@@ -127,6 +138,48 @@ export function useGameState(socket: Socket): UseGameStateReturn {
       setHandHistory([]);
     }
 
+    function onSignSessionRequest(data: {
+      definition: any;
+      allocations: any;
+      req: any[];
+    }) {
+      console.log("[Game] Received SIGN_SESSION_REQUEST", { hasReq: !!data.req });
+      if (!yellowClient || !address) {
+        console.error("[Game] Cannot sign session — no Yellow client or address");
+        return;
+      }
+
+      setIsSigningSession(true);
+      yellowClient
+        .signPayload(data.req)
+        .then((signature: string) => {
+          console.log("[Game] Payload signed locally, sending signature to server");
+          socket.emit(EVENTS.SESSION_SIGNED, {
+            roomId,
+            address,
+            signature,
+          });
+        })
+        .catch((err: any) => {
+          console.error("[Game] Failed to sign payload:", err);
+          setError(`Failed to sign session: ${err?.message ?? "unknown"}`);
+        })
+        .finally(() => {
+          setIsSigningSession(false);
+        });
+    }
+
+    function onSessionReady() {
+      console.log("[Game] Session ready — hand starting");
+      setIsSigningSession(false);
+    }
+
+    function onSessionError(data: { message: string }) {
+      console.error("[Game] Session error:", data.message);
+      setIsSigningSession(false);
+      setError(`Session error: ${data.message}`);
+    }
+
     socket.on(EVENTS.GAME_STATE, onGameState);
     socket.on(EVENTS.ROOM_CREATED, onRoomCreated);
     socket.on(EVENTS.PLAYER_JOINED, onPlayerJoined);
@@ -134,6 +187,9 @@ export function useGameState(socket: Socket): UseGameStateReturn {
     socket.on(EVENTS.PLAYER_LEFT, onPlayerLeft);
     socket.on(EVENTS.ERROR, onError);
     socket.on(EVENTS.CASHED_OUT, onCashedOut);
+    socket.on(EVENTS.SIGN_SESSION_REQUEST, onSignSessionRequest);
+    socket.on(EVENTS.SESSION_READY, onSessionReady);
+    socket.on(EVENTS.SESSION_ERROR, onSessionError);
 
     return () => {
       socket.off(EVENTS.GAME_STATE, onGameState);
@@ -143,8 +199,11 @@ export function useGameState(socket: Socket): UseGameStateReturn {
       socket.off(EVENTS.PLAYER_LEFT, onPlayerLeft);
       socket.off(EVENTS.ERROR, onError);
       socket.off(EVENTS.CASHED_OUT, onCashedOut);
+      socket.off(EVENTS.SIGN_SESSION_REQUEST, onSignSessionRequest);
+      socket.off(EVENTS.SESSION_READY, onSessionReady);
+      socket.off(EVENTS.SESSION_ERROR, onSessionError);
     };
-  }, [socket, seatIndex]);
+  }, [socket, seatIndex, yellowClient, address, roomId]);
 
   const createRoom = useCallback(
     (config: {
@@ -223,6 +282,7 @@ export function useGameState(socket: Socket): UseGameStateReturn {
     roomId,
     seatIndex,
     error,
+    isSigningSession,
     createRoom,
     joinRoom,
     leaveRoom,

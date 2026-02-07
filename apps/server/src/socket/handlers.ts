@@ -58,6 +58,7 @@ export function setupSocketHandlers(
             },
             (roomId, result) => {
               // Broadcast hand complete to room
+              console.log(`[Socket] Hand complete in ${roomId}:`, JSON.stringify(result.winners));
               io.to(roomId).emit(EVENTS.HAND_COMPLETE, result);
 
               // Send updated game state to each player
@@ -67,10 +68,13 @@ export function setupSocketHandlers(
               if (room) {
                 const removed = room.consumeRecentlyRemoved();
                 for (const seatIndex of removed) {
-                  handleDeferredRemoval(io, roomId, seatIndex);
-                  io.to(roomId).emit(EVENTS.PLAYER_LEFT, { seatIndex });
+                // Emit PLAYER_LEFT to the leaving socket BEFORE removing them from the room
+                emitToSeatInRoom(io, roomId, seatIndex, EVENTS.PLAYER_LEFT, {
+                  seatIndex,
+                });
                 }
 
+                console.log(`[Socket] Submitting hand allocations to Yellow for room ${roomId}`);
                 yellowSessions
                   .submitHandAllocations(room)
                   .catch((err) =>
@@ -238,7 +242,9 @@ export function setupSocketHandlers(
         }
 
         if (roomInfo.seatIndex !== 0) {
-          socket.emit(EVENTS.ERROR, { message: "Only the host can start a hand" });
+          socket.emit(EVENTS.ERROR, {
+            message: "Only the host can start a hand",
+          });
           return;
         }
 
@@ -248,23 +254,82 @@ export function setupSocketHandlers(
           return;
         }
 
-        if (!yellowSessions.hasSession(room.roomId)) {
-          try {
-            await yellowSessions.ensureSession(room);
-          } catch (yellowErr: any) {
-            console.warn("[Yellow] Session creation failed (non-blocking):", yellowErr?.message);
-          }
+        // If session already exists, start hand immediately
+        if (yellowSessions.hasSession(room.roomId)) {
+          console.log(`[Yellow] Session already exists for room ${room.roomId} — starting hand`);
+          (room as PokerRoom).startHand();
+          autoFoldPendingLeavers(io, data.roomId, roomManager, yellowSessions);
+          broadcastGameState(io, data.roomId, roomManager);
+          console.log(`[Game] Hand started in ${data.roomId}`);
+          return;
         }
 
-        (room as PokerRoom).startHand();
-        autoFoldPendingLeavers(io, data.roomId, roomManager, yellowSessions);
-        broadcastGameState(io, data.roomId, roomManager);
+        // If already signing, don't start again
+        if (yellowSessions.hasPendingSession(room.roomId)) {
+          socket.emit(EVENTS.ERROR, { message: "Session signing already in progress" });
+          return;
+        }
 
-        console.log(`[Game] Hand started in ${data.roomId}`);
+        // Start multi-party signing flow
+        console.log(`[Yellow] Starting multi-party signing for room ${room.roomId}...`);
+        try {
+          const { definition, allocations, req } = await yellowSessions.startSigning(
+            room,
+            // onReady — session created, start the hand
+            (sessionId) => {
+              console.log(`[Yellow] Session ready: ${sessionId} — starting hand`);
+              io.to(data.roomId).emit(EVENTS.SESSION_READY, { sessionId });
+              try {
+                (room as PokerRoom).startHand();
+                autoFoldPendingLeavers(io, data.roomId, roomManager, yellowSessions);
+                broadcastGameState(io, data.roomId, roomManager);
+                console.log(`[Game] Hand started in ${data.roomId}`);
+              } catch (err: any) {
+                console.error(`[Game] Failed to start hand: ${err.message}`);
+                io.to(data.roomId).emit(EVENTS.ERROR, { message: err.message });
+              }
+            },
+            // onError — session creation failed
+            (error) => {
+              console.error(`[Yellow] Session signing failed: ${error.message}`);
+              io.to(data.roomId).emit(EVENTS.SESSION_ERROR, {
+                message: error.message,
+              });
+            },
+          );
+
+          // Emit signing request to all players in the room (includes req payload to co-sign)
+          console.log(`[Yellow] Emitting SIGN_SESSION_REQUEST to room ${data.roomId}`);
+          io.to(data.roomId).emit(EVENTS.SIGN_SESSION_REQUEST, {
+            definition,
+            allocations,
+            req,
+          });
+        } catch (yellowErr: any) {
+          console.error("[Yellow] startSigning failed:", yellowErr?.message);
+          socket.emit(EVENTS.SESSION_ERROR, {
+            message: yellowErr?.message ?? "Failed to start session signing",
+          });
+        }
       } catch (err: any) {
         socket.emit(EVENTS.ERROR, { message: err.message });
       }
     });
+
+    // Player sends their signature of the app session req payload
+    socket.on(
+      EVENTS.SESSION_SIGNED,
+      (data: { roomId: string; address: string; signature: string }) => {
+        const roomInfo = socketRooms.get(socket.id);
+        if (!roomInfo || roomInfo.roomId !== data.roomId) return;
+
+        const address = socket.data.address || data.address;
+        if (!address || !data.signature) return;
+
+        console.log(`[Socket] SESSION_SIGNED from ${address.slice(0, 10)} for room ${data.roomId}`);
+        yellowSessions.markSigned(data.roomId, address, data.signature);
+      },
+    );
 
     // Player action
     socket.on(
@@ -371,12 +436,23 @@ function handleLeaveRoom(
     if (deferIfHandInProgress && room.gameType === "poker") {
       const pokerRoom = room as PokerRoom;
       if (pokerRoom.requestLeave(roomInfo.seatIndex)) {
+        // Leave is deferred — player will be removed after hand completes
         return;
       }
     }
 
-    room.removePlayer(roomInfo.seatIndex);
+    // Snapshot allocations BEFORE removing the player so chip data is preserved
+    if (yellowSessions.hasSession(roomId) && room.gameType === "poker") {
+      console.log(`[Yellow] Snapshotting allocations before removing seat ${roomInfo.seatIndex} from room ${roomId}`);
+      yellowSessions
+        .submitHandAllocations(room as PokerRoom)
+        .catch((err) => console.error("[Yellow] Snapshot failed:", err));
+    }
 
+    room.removePlayer(roomInfo.seatIndex);
+    console.log(`[Room] Removed seat ${roomInfo.seatIndex} from ${roomId}, remaining players: ${room.getPlayerCount()}`);
+
+    // Emit PLAYER_LEFT while the socket is still in the room so they receive it
     io.to(roomId).emit(EVENTS.PLAYER_LEFT, {
       seatIndex: roomInfo.seatIndex,
     });
@@ -384,11 +460,13 @@ function handleLeaveRoom(
     // Broadcast updated game state to remaining players
     broadcastGameState(io, roomId, roomManager);
 
-    // Delete room if empty
+    // Delete room if empty — close session to distribute funds
     if (room.getPlayerCount() === 0) {
       if (yellowSessions.hasSession(roomId)) {
+        console.log(`[Yellow] Room empty — closing session for room ${roomId}`);
+        // lastAllocations was snapshot above with all players still present
         yellowSessions
-          .closeSession(roomId, room as PokerRoom)
+          .closeSession(roomId)
           .catch((err) => console.error("[Yellow] Close failed:", err));
       }
       roomManager.deleteRoom(roomId);
@@ -421,6 +499,24 @@ function handleDeferredRemoval(
   }
 }
 
+/** Emit an event directly to the socket(s) for a specific seat in a room */
+function emitToSeatInRoom(
+  io: Server,
+  roomId: string,
+  seatIndex: number,
+  event: string,
+  data: unknown,
+): void {
+  for (const [socketId, info] of socketRooms.entries()) {
+    if (info.roomId === roomId && info.seatIndex === seatIndex) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit(event, data);
+      }
+    }
+  }
+}
+
 function autoFoldPendingLeavers(
   io: Server,
   roomId: string,
@@ -441,6 +537,9 @@ function autoFoldPendingLeavers(
 
     const removed = pokerRoom.consumeRecentlyRemoved();
     for (const seatIndex of removed) {
+      emitToSeatInRoom(io, roomId, seatIndex, EVENTS.PLAYER_LEFT, {
+        seatIndex,
+      });
       handleDeferredRemoval(io, roomId, seatIndex);
       io.to(roomId).emit(EVENTS.PLAYER_LEFT, { seatIndex });
     }

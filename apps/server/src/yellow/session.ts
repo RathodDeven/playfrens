@@ -1,5 +1,5 @@
 import type { AppSessionConfig, AppSessionStatus } from "@playfrens/shared";
-import type { Address } from "viem";
+import { type Address, getAddress } from "viem";
 import type { AppSessionAllocation, AppSessionDefinition } from "./client.js";
 
 export interface AppSession {
@@ -21,7 +21,11 @@ export function createSessionDefinition(
   serverAddress: string,
   application = "PlayFrens",
 ): AppSessionDefinition {
-  const allParticipants = [...participants, serverAddress] as Address[];
+  // Normalize all addresses to EIP-55 checksum format — Clearnode
+  // stores wallet addresses in checksum and does case-sensitive comparison.
+  const allParticipants = [...participants, serverAddress].map(
+    (a) => getAddress(a as `0x${string}`),
+  ) as Address[];
   const weights = participants.map(() => 0);
   weights.push(100); // Server (trusted judge) has full weight
 
@@ -68,14 +72,14 @@ export function createInitialAllocations(
 ): AppSessionAllocation[] {
   const playerAmount = String(roundAmount(buyIn * chipUnit));
   const allocations: AppSessionAllocation[] = participants.map((p) => ({
-    participant: p as Address,
+    participant: getAddress(p as `0x${string}`) as Address,
     asset: ASSET,
     amount: playerAmount,
   }));
 
   // Server participant gets 0
   allocations.push({
-    participant: serverAddress as Address,
+    participant: getAddress(serverAddress as `0x${string}`) as Address,
     asset: ASSET,
     amount: "0",
   });
@@ -95,8 +99,13 @@ export function computeAllocations(
 ): AppSessionAllocation[] {
   const addressToAmount = new Map<string, number>();
 
+  // Normalize participant addresses to EIP-55 checksum
+  const checksumParticipants = participants.map((p) =>
+    getAddress(p as `0x${string}`),
+  );
+
   // Initialize all participants with 0
-  for (const p of participants) {
+  for (const p of checksumParticipants) {
     addressToAmount.set(p, 0);
   }
 
@@ -105,7 +114,7 @@ export function computeAllocations(
     0,
   );
   if (totalChips === 0) {
-    return participants.map((p) => ({
+    return checksumParticipants.map((p) => ({
       participant: p as Address,
       asset: ASSET,
       amount: "0",
@@ -118,8 +127,9 @@ export function computeAllocations(
   let topChips = -1;
 
   for (const [seat, chips] of chipCounts) {
-    const address = seatToAddress.get(seat);
-    if (!address) continue;
+    const rawAddress = seatToAddress.get(seat);
+    if (!rawAddress) continue;
+    const address = getAddress(rawAddress as `0x${string}`);
 
     const amount = roundAmount(chips * chipUnit);
     addressToAmount.set(address, amount);
@@ -138,7 +148,7 @@ export function computeAllocations(
     addressToAmount.set(topAddress, roundAmount(current + diff));
   }
 
-  return participants.map((p) => ({
+  return checksumParticipants.map((p) => ({
     participant: p as Address,
     asset: ASSET,
     amount: String(addressToAmount.get(p) ?? 0),

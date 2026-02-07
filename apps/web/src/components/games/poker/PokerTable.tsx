@@ -3,11 +3,11 @@ import type {
   PokerAction,
   PokerPlayerState,
 } from "@playfrens/shared";
-import { REACTIONS } from "@playfrens/shared";
+
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
-import { formatYusd } from "../../../lib/format";
+import { useEffect, useRef, useState } from "react";
 import type { HandHistoryEntry } from "../../../hooks/useGameState";
+import { formatYusd } from "../../../lib/format";
 import { ActionBar } from "./ActionBar";
 import { CommunityCards } from "./CommunityCards";
 import { HandHistory } from "./HandHistory";
@@ -17,8 +17,8 @@ import { PotDisplay } from "./PotDisplay";
 // 4-seat positions: bottom (hero), left, top, right
 const seatPositions = [
   { top: "85%", left: "50%", transform: "translate(-50%, -50%)" }, // 0: bottom center (hero)
-  { top: "50%", left: "5%", transform: "translate(0, -50%)" },    // 1: left center
-  { top: "5%", left: "50%", transform: "translate(-50%, 0)" },    // 2: top center
+  { top: "50%", left: "5%", transform: "translate(0, -50%)" }, // 1: left center
+  { top: "5%", left: "50%", transform: "translate(-50%, 0)" }, // 2: top center
   { top: "50%", left: "95%", transform: "translate(-100%, -50%)" }, // 3: right center
 ];
 
@@ -29,7 +29,7 @@ export function PokerTable({
   heroSeatIndex,
   onAction,
   onStartHand,
-  onReaction,
+  isSigningSession,
 }: {
   gameState: PokerPlayerState;
   lastHandResult: HandResult | null;
@@ -37,12 +37,45 @@ export function PokerTable({
   heroSeatIndex: number;
   onAction: (action: PokerAction, betSize?: number) => void;
   onStartHand: () => void;
-  onReaction: (reaction: string) => void;
+  isSigningSession?: boolean;
 }) {
   const [showConfetti, setShowConfetti] = useState(false);
-  const [floatingReactions, setFloatingReactions] = useState<
-    Array<{ id: number; reaction: string; x: number }>
-  >([]);
+
+  const autoStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Show confetti when hero wins
+  useEffect(() => {
+    if (lastHandResult?.winners.some((w) => w.seatIndex === heroSeatIndex)) {
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 3000);
+    }
+  }, [lastHandResult, heroSeatIndex]);
+
+  // Auto-start next hand after showing result (host only)
+  useEffect(() => {
+    if (autoStartTimerRef.current) {
+      clearTimeout(autoStartTimerRef.current);
+      autoStartTimerRef.current = null;
+    }
+
+    if (
+      lastHandResult &&
+      !gameState.isHandInProgress &&
+      heroSeatIndex === 0 &&
+      gameState.seats.length >= 2
+    ) {
+      autoStartTimerRef.current = setTimeout(() => {
+        onStartHand();
+        autoStartTimerRef.current = null;
+      }, 4000);
+    }
+
+    return () => {
+      if (autoStartTimerRef.current) {
+        clearTimeout(autoStartTimerRef.current);
+      }
+    };
+  }, [lastHandResult, gameState.isHandInProgress, heroSeatIndex, gameState.seats.length, onStartHand]);
 
   // Show confetti when hero wins
   useEffect(() => {
@@ -57,11 +90,12 @@ export function PokerTable({
 
   const chipUnit = gameState.chipUnit || 1;
 
-  // Only host (seat 0) can start hands
+  // Only host (seat 0) can start hands — show button only for first hand (no lastHandResult yet)
   const canStartHand =
     !gameState.isHandInProgress &&
     gameState.seats.length >= 2 &&
-    heroSeatIndex === 0;
+    heroSeatIndex === 0 &&
+    !lastHandResult;
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">
@@ -74,12 +108,12 @@ export function PokerTable({
             <p className="text-white/10 text-3xl font-black">PlayFrens</p>
           </div>
 
-          {/* Deck visual at center — shows during hand */}
+          {/* Deck visual at center-top — shows during hand */}
           {gameState.isHandInProgress && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="absolute top-[28%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+              className="absolute top-[15%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
             >
               <div className="relative w-14 h-20">
                 {/* Stacked deck cards */}
@@ -91,20 +125,19 @@ export function PokerTable({
           )}
 
           {/* Community Cards */}
-          <div className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2">
             <CommunityCards cards={gameState.communityCards} />
           </div>
 
-          {/* Pot */}
-          <div className="absolute top-[55%] left-1/2 -translate-x-1/2 -translate-y-1/2">
+          {/* Pot — below community cards, clear spacing */}
+          <div className="absolute top-[60%] left-1/2 -translate-x-1/2 -translate-y-1/2">
             <PotDisplay pots={gameState.pots} chipUnit={chipUnit} />
           </div>
 
           {/* Player Seats — hero rotation */}
           <AnimatePresence>
             {gameState.seats.map((seat) => {
-              const positionIndex =
-                (seat.seatIndex - heroSeatIndex + 4) % 4;
+              const positionIndex = (seat.seatIndex - heroSeatIndex + 4) % 4;
               return (
                 <div
                   key={seat.seatIndex}
@@ -136,9 +169,10 @@ export function PokerTable({
               whileTap={{ scale: 0.9 }}
               transition={{ type: "spring", damping: 10 }}
               onClick={onStartHand}
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-8 py-4 rounded-2xl bg-gradient-to-r from-neon-green to-neon-blue text-black font-black text-xl shadow-lg glow-green"
+              disabled={isSigningSession}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-8 py-4 rounded-2xl bg-gradient-to-r from-neon-green to-neon-blue text-black font-black text-xl shadow-lg glow-green disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Deal Cards!
+              {isSigningSession ? "Signing Session..." : "Deal Cards!"}
             </motion.button>
           )}
 
@@ -146,26 +180,60 @@ export function PokerTable({
           <AnimatePresence>
             {lastHandResult && !gameState.isHandInProgress && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute top-[25%] left-1/2 -translate-x-1/2 glass rounded-2xl px-6 py-4 text-center"
+                initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="absolute top-[50%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 glass rounded-2xl px-8 py-5 text-center shadow-2xl border border-neon-green/30"
               >
-                {lastHandResult.winners.map((w) => (
-                  <div key={w.seatIndex}>
-                    <p className="text-neon-green font-bold text-lg">
-                      {w.seatIndex === heroSeatIndex
-                        ? "You won! Big brain move!"
-                        : `Seat ${w.seatIndex} wins!`}
-                    </p>
-                    <p className="text-neon-yellow font-mono">
-                      +{w.amount} chips ({formatYusd(w.amount * chipUnit)} ytest.usd)
-                    </p>
-                    {w.hand && (
-                      <p className="text-white/50 text-sm">{w.hand}</p>
-                    )}
-                  </div>
-                ))}
+                {lastHandResult.winners.map((w, idx) => {
+                  const winnerSeat = gameState.seats.find(
+                    (s) => s.seatIndex === w.seatIndex,
+                  );
+                  const shortAddr = (addr?: string) =>
+                    addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : null;
+                  const winnerName =
+                    w.seatIndex === heroSeatIndex
+                      ? "You"
+                      : w.ensName ||
+                        winnerSeat?.ensName ||
+                        shortAddr(w.address) ||
+                        shortAddr(winnerSeat?.address) ||
+                        `Player ${(w.seatIndex ?? idx) + 1}`;
+                  const winAmount = w.amount || 0;
+                  return (
+                    <div key={w.seatIndex ?? idx} className="space-y-1">
+                      <motion.p
+                        initial={{ scale: 0.5 }}
+                        animate={{ scale: 1 }}
+                        className="text-neon-green font-black text-xl"
+                      >
+                        {w.seatIndex === heroSeatIndex
+                          ? "🎉 You won!"
+                          : `${winnerName} wins!`}
+                      </motion.p>
+                      <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.2 }}
+                        className="text-neon-yellow font-mono text-lg font-bold"
+                      >
+                        +{winAmount} chips ({formatYusd(winAmount * chipUnit)}{" "}
+                        ytest.usd)
+                      </motion.p>
+                      {w.hand && (
+                        <p className="text-white/60 text-sm mt-1">{w.hand}</p>
+                      )}
+                    </div>
+                  );
+                })}
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 1 }}
+                  className="text-white/30 text-xs mt-3"
+                >
+                  Next hand starting...
+                </motion.p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -179,74 +247,28 @@ export function PokerTable({
       </div>
 
       {/* Bottom bar */}
-      <div className="p-4 glass">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          {/* Reactions */}
-          <div className="flex gap-2">
-            {REACTIONS.map((r) => (
-              <motion.button
-                key={r}
-                whileHover={{ scale: 1.3 }}
-                whileTap={{ scale: 0.8 }}
-                onClick={() => {
-                  onReaction(r);
-                  const id = Date.now();
-                  setFloatingReactions((prev) => [
-                    ...prev,
-                    { id, reaction: r, x: Math.random() * 100 },
-                  ]);
-                  setTimeout(
-                    () =>
-                      setFloatingReactions((prev) =>
-                        prev.filter((fr) => fr.id !== id),
-                      ),
-                    2000,
-                  );
-                }}
-                className="text-2xl hover:bg-white/10 rounded-lg p-1 transition-colors"
-              >
-                {r}
-              </motion.button>
-            ))}
-          </div>
-
-          {/* Action bar */}
-          {isHeroTurn && (
+      <div className="px-4 py-3 glass">
+        <div className="flex items-center justify-center max-w-4xl mx-auto">
+          {isHeroTurn ? (
             <ActionBar
               legalActions={gameState.legalActions}
               onAction={onAction}
               chipUnit={chipUnit}
             />
-          )}
-
-          {/* Status */}
-          {!isHeroTurn && gameState.isHandInProgress && (
+          ) : gameState.isHandInProgress ? (
             <p className="text-white/40 text-sm">
               Waiting for{" "}
-              {gameState.seats.find(
-                (s) => s.seatIndex === gameState.currentPlayerSeat,
-              )?.ensName || "opponent"}
-              ...
+              <span className="text-white/60 font-medium">
+                {gameState.seats.find(
+                  (s) => s.seatIndex === gameState.currentPlayerSeat,
+                )?.ensName || "opponent"}
+              </span>
             </p>
-          )}
+          ) : !lastHandResult && !canStartHand ? (
+            <p className="text-white/40 text-sm">Waiting for players...</p>
+          ) : null}
         </div>
       </div>
-
-      {/* Floating reactions */}
-      <AnimatePresence>
-        {floatingReactions.map((fr) => (
-          <motion.div
-            key={fr.id}
-            initial={{ opacity: 1, y: 0, x: `${fr.x}vw` }}
-            animate={{ opacity: 0, y: -200 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 2 }}
-            className="fixed bottom-20 text-4xl pointer-events-none"
-          >
-            {fr.reaction}
-          </motion.div>
-        ))}
-      </AnimatePresence>
     </div>
   );
 }

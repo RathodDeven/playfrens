@@ -160,6 +160,20 @@ export class YellowRpcClient {
     }));
   }
 
+  /**
+   * Sign a raw RPC request payload locally using the session key.
+   * Does NOT send anything to Clearnode — the server collects all signatures
+   * and sends a single multi-sig message.
+   */
+  async signPayload(payload: any[]): Promise<string> {
+    // Ensure authorized so Clearnode knows our session key mapping
+    await this.authorize();
+    console.log("[Yellow] Signing payload locally with session key");
+    const signature = await this.sessionSigner(payload as [any, any, any]);
+    console.log("[Yellow] Payload signed:", signature.slice(0, 20) + "...");
+    return signature;
+  }
+
   disconnect(): void {
     if (this.authTimeout) {
       clearTimeout(this.authTimeout);
