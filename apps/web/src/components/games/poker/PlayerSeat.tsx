@@ -9,14 +9,24 @@ export function PlayerSeat({
   isHero,
   holeCards,
   chipUnit,
+  isHandInProgress,
 }: {
   seat: SeatState;
   isHero: boolean;
   holeCards?: PokerCard[];
   chipUnit: number;
+  isHandInProgress: boolean;
 }) {
   const displayName =
     seat.ensName || `${seat.address.slice(0, 6)}...${seat.address.slice(-4)}`;
+
+  // Card rendering logic:
+  // - Folded: no cards shown
+  // - Hero with holeCards: show face-up
+  // - Other players during hand: show face-down (they have cards but we can't see them)
+  // - No hand in progress: no cards shown
+  const showCards = isHandInProgress && !seat.isFolded;
+  const heroHasCards = isHero && holeCards && holeCards.length > 0;
 
   return (
     <motion.div
@@ -31,19 +41,19 @@ export function PlayerSeat({
     >
       {/* Hole Cards */}
       <div className="flex gap-1">
-        {isHero && holeCards
-          ? holeCards.map((card, i) => (
+        {showCards && heroHasCards
+          ? (holeCards ?? []).map((card, i) => (
               <Card
                 key={`${card.rank}-${card.suit}`}
                 card={card}
                 delay={i * 0.15}
               />
             ))
-          : seat.isFolded
-            ? null
-            : [0, 1].map((i) => (
+          : showCards
+            ? [0, 1].map((i) => (
                 <Card key={`hidden-${i}`} faceDown delay={i * 0.15} />
-              ))}
+              ))
+            : null}
       </div>
 
       {/* Bet */}
@@ -53,7 +63,7 @@ export function PlayerSeat({
 
       {/* Player Info */}
       <motion.div
-        className={`glass rounded-xl px-4 py-2.5 text-center min-w-[120px] ${
+        className={`glass rounded-xl px-4 py-2.5 text-center min-w-[120px] relative ${
           seat.isTurn
             ? "border-neon-blue border-2"
             : seat.isFolded
@@ -91,6 +101,13 @@ export function PlayerSeat({
         <p className="text-[10px] font-mono text-white/40">
           {formatYusd(seat.chipCount * chipUnit)} ytest.usd
         </p>
+
+        {/* Folded badge */}
+        {seat.isFolded && isHandInProgress && (
+          <span className="absolute -top-1 -left-1 text-[9px] font-bold text-red-400 bg-red-500/20 rounded px-1">
+            FOLD
+          </span>
+        )}
 
         {/* Dealer button */}
         {seat.isDealer && (

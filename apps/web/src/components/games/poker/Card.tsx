@@ -9,11 +9,17 @@ const suitSymbols: Record<string, string> = {
 };
 
 const suitColors: Record<string, string> = {
-  spades: "text-white",
+  spades: "text-gray-800",
   hearts: "text-red-500",
   diamonds: "text-red-500",
-  clubs: "text-white",
+  clubs: "text-gray-800",
 };
+
+// Map rank for display (T -> 10)
+function displayRank(rank: string): string {
+  if (rank === "T") return "10";
+  return rank;
+}
 
 export function Card({
   card,
@@ -28,38 +34,39 @@ export function Card({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -30, rotateY: 180 }}
-      animate={{ opacity: 1, y: 0, rotateY: isFaceDown ? 180 : 0 }}
+      initial={{ opacity: 0, y: -20, scale: 0.8 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{
         type: "spring",
         damping: 15,
         delay,
       }}
-      className="relative w-14 h-20 perspective-[600px]"
+      className="w-14 h-20"
     >
-      <div
-        className={`w-full h-full rounded-lg shadow-lg ${
-          isFaceDown
-            ? "card-back border border-purple-500/30"
-            : "bg-white border border-gray-200"
-        } flex flex-col items-center justify-center`}
-      >
-        {!isFaceDown && card && (
-          <>
-            <span
-              className={`text-lg font-bold leading-none ${suitColors[card.suit]}`}
-            >
-              {card.rank}
-            </span>
-            <span className={`text-lg leading-none ${suitColors[card.suit]}`}>
-              {suitSymbols[card.suit]}
-            </span>
-          </>
-        )}
-        {isFaceDown && (
+      {isFaceDown ? (
+        <div className="w-full h-full rounded-lg shadow-lg card-back border border-purple-500/30 flex items-center justify-center">
           <div className="text-purple-300/50 text-xs font-bold">PF</div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="w-full h-full rounded-lg shadow-lg bg-white border border-gray-200 flex flex-col items-center justify-center relative">
+          {card && (
+            <>
+              {/* Top-left rank + suit */}
+              <span className={`absolute top-1 left-1.5 text-[10px] font-bold leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}>
+                {displayRank(card.rank)}
+                {suitSymbols[card.suit] ?? "?"}
+              </span>
+              {/* Center */}
+              <span className={`text-2xl leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}>
+                {suitSymbols[card.suit] ?? "?"}
+              </span>
+              <span className={`text-sm font-bold leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}>
+                {displayRank(card.rank)}
+              </span>
+            </>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 }

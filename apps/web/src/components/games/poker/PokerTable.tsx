@@ -74,6 +74,22 @@ export function PokerTable({
             <p className="text-white/10 text-3xl font-black">PlayFrens</p>
           </div>
 
+          {/* Deck visual at center — shows during hand */}
+          {gameState.isHandInProgress && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute top-[28%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            >
+              <div className="relative w-14 h-20">
+                {/* Stacked deck cards */}
+                <div className="absolute top-0 left-0 w-full h-full card-back rounded-lg border border-purple-500/30 shadow-md" />
+                <div className="absolute top-[2px] left-[2px] w-full h-full card-back rounded-lg border border-purple-500/20 shadow-sm" />
+                <div className="absolute top-[4px] left-[4px] w-full h-full card-back rounded-lg border border-purple-400/10" />
+              </div>
+            </motion.div>
+          )}
+
           {/* Community Cards */}
           <div className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2">
             <CommunityCards cards={gameState.communityCards} />
@@ -104,6 +120,7 @@ export function PokerTable({
                         : undefined
                     }
                     chipUnit={chipUnit}
+                    isHandInProgress={gameState.isHandInProgress}
                   />
                 </div>
               );

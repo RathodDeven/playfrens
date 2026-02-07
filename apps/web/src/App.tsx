@@ -1,5 +1,7 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
+import { useEffect } from "react";
+import toast from "react-hot-toast";
 import { useAccount, useEnsAvatar, useEnsName } from "wagmi";
 import { mainnet } from "wagmi/chains";
 import { PokerTable } from "./components/games/poker/PokerTable";
@@ -22,7 +24,7 @@ export function App() {
     chainId: mainnet.id,
   });
 
-  const { socket, isRegistered } = useSocket(
+  const { socket } = useSocket(
     address,
     ensName ?? undefined,
     ensAvatar ?? undefined,
@@ -48,7 +50,6 @@ export function App() {
   const {
     balance,
     isAuthorized,
-    isAuthorizing,
     authError,
     retryAuth,
     refetchBalance,
@@ -62,6 +63,14 @@ export function App() {
     isDepositing: isCustodyDepositing,
     isWithdrawing: isCustodyWithdrawing,
   } = useCustody(address);
+
+  // Show errors via react-hot-toast
+  useEffect(() => {
+    if (error) {
+      toast.error(error, { id: "game-error" });
+      clearError();
+    }
+  }, [error, clearError]);
 
   // Not connected
   if (!isConnected) {
@@ -138,21 +147,6 @@ export function App() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header roomId={roomId} onLeaveRoom={leaveRoom} onCashOut={cashOut} />
-
-      {/* Error toast */}
-      <AnimatePresence>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-4 right-4 z-50 px-5 py-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 cursor-pointer"
-            onClick={clearError}
-          >
-            {error}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Main content */}
       {roomId && gameState ? (

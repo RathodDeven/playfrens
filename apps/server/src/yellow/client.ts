@@ -1,12 +1,16 @@
 import {
   RPCMethod,
+  createAppSessionMessage,
   createAuthRequestMessage,
   createAuthVerifyMessageFromChallenge,
+  createCloseAppSessionMessage,
+  createECDSAMessageSigner,
   createEIP712AuthMessageSigner,
+  createGetLedgerBalancesMessage,
 } from "@erc7824/nitrolite";
 import { CLEARNODE_WS_URL } from "@playfrens/shared";
-import { ethers } from "ethers";
-import type { WalletClient } from "viem";
+import type { Address, Hex, WalletClient } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import WebSocket from "ws";
 
 type MessageHandler = (data: any) => void;
@@ -23,14 +27,29 @@ interface PendingRequest {
   reject: (e: Error) => void;
 }
 
+export interface AppSessionDefinition {
+  protocol: string;
+  participants: Address[];
+  weights: number[];
+  quorum: number;
+  challenge: number;
+  nonce: number;
+  application: string;
+}
+
+export interface AppSessionAllocation {
+  participant: Address;
+  asset: string;
+  amount: string;
+}
+
 export class YellowClient {
   private ws: WebSocket | null = null;
   private wallet: WalletClient;
-  private signer: ethers.Wallet;
-  private sessionSigner: ethers.Wallet;
+  private sessionPrivateKey: Hex;
+  private sessionSigner: ReturnType<typeof createECDSAMessageSigner>;
   private handlers: Map<string, MessageHandler> = new Map();
-  private requestId = 0;
-  private pendingRequests: Map<number, PendingRequest> = new Map();
+  private pendingByMethod: Map<string, PendingRequest> = new Map();
   private authenticated = false;
   private wsUrl: string;
   private reconnectTimer: NodeJS.Timeout | null = null;
@@ -45,17 +64,16 @@ export class YellowClient {
 
   constructor(
     wallet: WalletClient,
-    privateKey: string,
+    _privateKey: string,
     sessionKey?: string,
     wsUrl?: string,
     application = "console",
     scope?: string,
   ) {
     this.wallet = wallet;
-    this.signer = new ethers.Wallet(privateKey);
-    this.sessionSigner = sessionKey
-      ? new ethers.Wallet(sessionKey)
-      : ethers.Wallet.createRandom();
+    // Use provided session key or generate ephemeral one
+    this.sessionPrivateKey = (sessionKey || generatePrivateKey()) as Hex;
+    this.sessionSigner = createECDSAMessageSigner(this.sessionPrivateKey);
     this.wsUrl = wsUrl || CLEARNODE_WS_URL;
     this.application = application;
     this.scope = scope || application;
@@ -172,9 +190,15 @@ export class YellowClient {
       throw new Error("Wallet has no account");
     }
 
+    const sessionAccount = privateKeyToAccount(this.sessionPrivateKey);
     const authParams: AuthParams = {
-      session_key: this.sessionSigner.address as `0x${string}`,
-      allowances: [],
+      session_key: sessionAccount.address,
+      allowances: [
+        {
+          asset: "ytest.usd",
+          amount: "1000000000", // Large allowance for server (trusted judge)
+        },
+      ],
       expires_at: BigInt(Math.floor(Date.now() / 1000) + 3600),
       scope: this.scope,
     };
@@ -213,7 +237,7 @@ export class YellowClient {
   private handleMessage(msg: any): void {
     // Handle response to pending request
     if (msg.res && Array.isArray(msg.res)) {
-      const [requestId, method, result] = msg.res;
+      const [_requestId, method, result] = msg.res;
 
       if (method === RPCMethod.AuthChallenge) {
         void this.handleAuthChallenge(
@@ -251,17 +275,20 @@ export class YellowClient {
       }
 
       if (method === "error") {
-        const pending = this.pendingRequests.get(requestId);
-        if (pending) {
-          this.pendingRequests.delete(requestId);
-          pending.reject(new Error(result?.error ?? "Unknown error"));
+        const errMsg = result?.error ?? "Unknown Clearnode error";
+        console.error("[Yellow] Error from Clearnode:", errMsg);
+        // Reject all pending method waiters
+        for (const [key, pending] of this.pendingByMethod.entries()) {
+          this.pendingByMethod.delete(key);
+          pending.reject(new Error(errMsg));
         }
         return;
       }
 
-      const pending = this.pendingRequests.get(requestId);
+      // Route to pending method waiter
+      const pending = this.pendingByMethod.get(method);
       if (pending) {
-        this.pendingRequests.delete(requestId);
+        this.pendingByMethod.delete(method);
         pending.resolve(result);
         return;
       }
@@ -276,14 +303,11 @@ export class YellowClient {
     if (!challenge) return;
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-    const address = this.wallet.account?.address;
-    if (!address) return;
-
     const authParams: AuthParams = this.lastAuthParams ?? {
-      session_key: this.sessionSigner.address as `0x${string}`,
-      allowances: [],
+      session_key: privateKeyToAccount(this.sessionPrivateKey).address,
+      allowances: [{ asset: "ytest.usd", amount: "1000000000" }],
       expires_at: BigInt(Math.floor(Date.now() / 1000) + 3600),
-      scope: this.application,
+      scope: this.scope,
     };
 
     const signer = createEIP712AuthMessageSigner(this.wallet, authParams, {
@@ -300,46 +324,105 @@ export class YellowClient {
     this.ws.send(authVerify);
   }
 
-  private async sendRequest(method: string, params: any): Promise<any> {
-    await this.ensureConnected();
-    if (!this.authenticated) {
-      throw new Error("Not authenticated with Clearnode");
-    }
-
+  /**
+   * Send a pre-signed message and wait for a specific method response.
+   */
+  private sendAndWait(signedMessage: string, waitMethod: string, timeoutMs = 15000): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error("WebSocket not connected"));
         return;
       }
 
-      const id = ++this.requestId;
-      const timestamp = Date.now();
-      const req = [id, method, params, timestamp];
-      const payload = { req } as { req: unknown[]; sig?: string[] };
-      const message = JSON.stringify(payload);
-      const digestHex = ethers.utils.id(message);
-      const messageBytes = ethers.utils.arrayify(digestHex);
-      const signature = this.sessionSigner
-        ._signingKey()
-        .signDigest(messageBytes);
-      payload.sig = [ethers.utils.joinSignature(signature)];
+      const timeout = setTimeout(() => {
+        this.pendingByMethod.delete(waitMethod);
+        reject(new Error(`Timeout waiting for ${waitMethod}`));
+      }, timeoutMs);
 
-      this.pendingRequests.set(id, { resolve, reject });
-      this.ws.send(JSON.stringify(payload));
+      this.pendingByMethod.set(waitMethod, {
+        resolve: (value) => {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+      });
+
+      this.ws.send(signedMessage);
     });
   }
 
+  /**
+   * Create an app session using the SDK helper.
+   * Returns the app_session_id.
+   */
   async createAppSession(
-    participants: string[],
-    weights: number[],
-    quorum: number,
+    definition: AppSessionDefinition,
+    allocations: AppSessionAllocation[],
   ): Promise<string> {
-    const result = await this.sendRequest("create_app_session", {
-      participants,
-      weights,
-      quorum,
-    });
-    return result.session_id;
+    await this.ensureConnected();
+    if (!this.authenticated) {
+      throw new Error("Not authenticated with Clearnode");
+    }
+
+    const signedMessage = await createAppSessionMessage(
+      this.sessionSigner,
+      {
+        definition: {
+          protocol: definition.protocol as any,
+          participants: definition.participants as `0x${string}`[],
+          weights: definition.weights,
+          quorum: definition.quorum,
+          challenge: definition.challenge,
+          nonce: definition.nonce,
+          application: definition.application,
+        },
+        allocations: allocations.map((a) => ({
+          participant: a.participant as Address,
+          asset: a.asset,
+          amount: a.amount,
+        })),
+      },
+    );
+
+    const result = await this.sendAndWait(signedMessage, "create_app_session");
+    const sessionData = Array.isArray(result) ? result[0] : result;
+    const sessionId = sessionData?.app_session_id;
+    if (!sessionId) {
+      throw new Error("No app_session_id returned from Clearnode");
+    }
+    console.log("[Yellow] App session created:", sessionId);
+    return sessionId;
+  }
+
+  /**
+   * Close an app session with final allocations using the SDK helper.
+   */
+  async closeAppSession(
+    sessionId: string,
+    allocations: AppSessionAllocation[],
+  ): Promise<void> {
+    await this.ensureConnected();
+    if (!this.authenticated) {
+      throw new Error("Not authenticated with Clearnode");
+    }
+
+    const signedMessage = await createCloseAppSessionMessage(
+      this.sessionSigner,
+      {
+        app_session_id: sessionId as `0x${string}`,
+        allocations: allocations.map((a) => ({
+          participant: a.participant as Address,
+          asset: a.asset,
+          amount: a.amount,
+        })),
+      },
+    );
+
+    await this.sendAndWait(signedMessage, "close_app_session");
+    console.log("[Yellow] App session closed:", sessionId);
   }
 
   async getBalance(address: string): Promise<number> {
@@ -357,8 +440,18 @@ export class YellowClient {
   async getLedgerBalances(
     accountId?: string,
   ): Promise<Array<{ asset: string; amount: string }>> {
-    const params = accountId ? { account_id: accountId } : {};
-    const result = await this.sendRequest("get_ledger_balances", params);
+    await this.ensureConnected();
+    if (!this.authenticated) {
+      throw new Error("Not authenticated with Clearnode");
+    }
+
+    const message = await createGetLedgerBalancesMessage(
+      this.sessionSigner,
+      accountId,
+      Date.now(),
+    );
+
+    const result = await this.sendAndWait(message, "get_ledger_balances");
     const balances =
       result?.ledger_balances ??
       result?.balances ??
@@ -366,33 +459,10 @@ export class YellowClient {
     if (!Array.isArray(balances)) {
       throw new Error("Invalid ledger balances response");
     }
-    return balances.map((balance) => ({
+    return balances.map((balance: any) => ({
       asset: String(balance.asset ?? ""),
       amount: String(balance.amount ?? "0"),
     }));
-  }
-
-  async submitAppState(
-    sessionId: string,
-    allocations: Record<string, number>,
-    intent: "operate" | "close" = "operate",
-  ): Promise<void> {
-    await this.sendRequest("submit_app_state", {
-      session_id: sessionId,
-      allocations,
-      intent,
-    });
-  }
-
-  async closeAppSession(
-    sessionId: string,
-    finalAllocations: Record<string, number>,
-  ): Promise<void> {
-    await this.sendRequest("submit_app_state", {
-      session_id: sessionId,
-      allocations: finalAllocations,
-      intent: "close",
-    });
   }
 
   on(event: string, handler: MessageHandler): void {

@@ -180,9 +180,11 @@ export class PokerRoom extends GameRoom {
         isDealer: this.table.isHandInProgress()
           ? this.table.button() === i
           : false,
-        isTurn: this.table.isHandInProgress()
-          ? this.table.playerToAct() === i
-          : false,
+        isTurn:
+          this.table.isHandInProgress() &&
+          this.table.isBettingRoundInProgress()
+            ? this.table.playerToAct() === i
+            : false,
       });
     }
 
@@ -247,28 +249,27 @@ export class PokerRoom extends GameRoom {
 
   private mapLegalActions(legal: any): LegalAction[] {
     const actions: LegalAction[] = [];
-    if (legal.canFold) {
-      actions.push({ action: "fold" });
-    }
-    if (legal.canCheck) {
-      actions.push({ action: "check" });
-    }
-    if (legal.canCall) {
-      actions.push({ action: "call" });
-    }
-    if (legal.canBet) {
-      actions.push({
-        action: "bet",
-        minBet: legal.chipRange?.min,
-        maxBet: legal.chipRange?.max,
+    const actionList: string[] = legal.actions ?? [];
+    for (const action of actionList) {
+      if (action === "fold") {
+        actions.push({ action: "fold" });
+      } else if (action === "check") {
+        actions.push({ action: "check" });
+      } else if (action === "call") {
+        actions.push({ action: "call", minBet: legal.chipRange?.min });
+      } else if (action === "bet") {
+        actions.push({
+          action: "bet",
+          minBet: legal.chipRange?.min,
+          maxBet: legal.chipRange?.max,
+        });
+      } else if (action === "raise") {
+        actions.push({
+          action: "raise",
+          minBet: legal.chipRange?.min,
+          maxBet: legal.chipRange?.max,
       });
-    }
-    if (legal.canRaise) {
-      actions.push({
-        action: "raise",
-        minBet: legal.chipRange?.min,
-        maxBet: legal.chipRange?.max,
-      });
+      }
     }
     return actions;
   }

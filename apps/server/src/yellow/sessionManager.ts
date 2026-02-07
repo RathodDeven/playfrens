@@ -1,22 +1,20 @@
 import type { GameRoom } from "../games/GameRoom.js";
 import type { PokerRoom } from "../games/poker/PokerRoom.js";
 import type { YellowClient } from "./client.js";
-import { computeAllocations, createSessionConfig } from "./session.js";
+import {
+  computeAllocations,
+  createInitialAllocations,
+  createSessionConfig,
+  createSessionDefinition,
+} from "./session.js";
 
 export interface RoomSession {
   sessionId: string;
   participants: string[];
+  serverAddress: string;
   totalDeposit: number;
   chipUnit: number;
   buyIn: number;
-}
-
-function toRecord(map: Map<string, number>): Record<string, number> {
-  const record: Record<string, number> = {};
-  for (const [key, value] of map.entries()) {
-    record[key] = value;
-  }
-  return record;
 }
 
 function roundAmount(value: number): number {
@@ -66,6 +64,10 @@ export class YellowSessionManager {
     return this.client.getLedgerBalances(address);
   }
 
+  /**
+   * Create an app session for a room, allocating each player's buy-in.
+   * Uses the SDK's createAppSessionMessage with proper definition + allocations.
+   */
   async ensureSession(room: GameRoom): Promise<RoomSession> {
     const existing = this.sessions.get(room.roomId);
     if (existing) return existing;
@@ -75,34 +77,34 @@ export class YellowSessionManager {
       throw new Error("Need at least 2 players to start a session");
     }
 
-    const config = createSessionConfig(participants, this.serverAddress);
+    // Build proper RPCAppDefinition
+    const definition = createSessionDefinition(
+      participants,
+      this.serverAddress,
+    );
+
+    // Build initial allocations: each player puts in buyIn * chipUnit
+    const allocations = createInitialAllocations(
+      participants,
+      this.serverAddress,
+      room.config.buyIn,
+      room.config.chipUnit,
+    );
+
+    // Create app session via Clearnode using SDK helper
     const sessionId = await this.client.createAppSession(
-      config.participants,
-      config.weights,
-      config.quorum,
+      definition,
+      allocations,
     );
 
     const totalDeposit = roundAmount(
       room.config.buyIn * room.config.chipUnit * participants.length,
     );
 
-    const allocations = new Map<string, number>();
-    for (const address of participants) {
-      allocations.set(
-        address,
-        roundAmount(room.config.buyIn * room.config.chipUnit),
-      );
-    }
-
-    await this.client.submitAppState(
-      sessionId,
-      toRecord(allocations),
-      "operate",
-    );
-
     const session: RoomSession = {
       sessionId,
       participants,
+      serverAddress: this.serverAddress,
       totalDeposit,
       chipUnit: room.config.chipUnit,
       buyIn: room.config.buyIn,
@@ -112,38 +114,50 @@ export class YellowSessionManager {
     return session;
   }
 
+  /**
+   * Log chip allocations after each hand (checkpoint).
+   * The actual fund settlement happens on closeSession.
+   * TODO: Use createSubmitAppStateMessage for per-hand state updates.
+   */
   async submitHandAllocations(room: PokerRoom): Promise<void> {
     const session = this.sessions.get(room.roomId);
     if (!session) return;
 
+    const allParticipants = [...session.participants, this.serverAddress];
     const allocations = computeAllocations(
-      session.participants,
+      allParticipants,
       room.getChipCounts(),
       room.getPlayerAddresses(),
       session.totalDeposit,
       session.chipUnit,
     );
 
-    await this.client.submitAppState(
-      session.sessionId,
-      toRecord(allocations),
-      "operate",
+    console.log(
+      `[Yellow] Hand allocations for session ${session.sessionId}:`,
+      allocations.map((a) => `${a.participant}: ${a.amount}`).join(", "),
     );
   }
 
+  /**
+   * Close the app session with final chip-to-ytest.usd allocations.
+   * Uses the SDK's createCloseAppSessionMessage.
+   */
   async closeSession(roomId: string, room: PokerRoom): Promise<void> {
     const session = this.sessions.get(roomId);
     if (!session) return;
 
+    // Include server in the participants list for close allocations
+    const allParticipants = [...session.participants, this.serverAddress];
+
     const allocations = computeAllocations(
-      session.participants,
+      allParticipants,
       room.getChipCounts(),
       room.getPlayerAddresses(),
       session.totalDeposit,
       session.chipUnit,
     );
 
-    await this.client.closeAppSession(session.sessionId, toRecord(allocations));
+    await this.client.closeAppSession(session.sessionId, allocations);
     this.sessions.delete(roomId);
   }
 }

@@ -249,7 +249,11 @@ export function setupSocketHandlers(
         }
 
         if (!yellowSessions.hasSession(room.roomId)) {
-          await yellowSessions.ensureSession(room);
+          try {
+            await yellowSessions.ensureSession(room);
+          } catch (yellowErr: any) {
+            console.warn("[Yellow] Session creation failed (non-blocking):", yellowErr?.message);
+          }
         }
 
         (room as PokerRoom).startHand();

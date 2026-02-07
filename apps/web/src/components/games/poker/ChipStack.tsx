@@ -15,8 +15,13 @@ export function ChipStack({
     >
       <div className="w-3 h-3 rounded-full bg-gradient-to-br from-neon-yellow to-yellow-600 border border-yellow-500/50" />
       <span className="text-xs font-bold font-mono text-neon-yellow">
-        {amount} ({formatYusd(amount * chipUnit)})
+        {amount} chips
       </span>
+      {chipUnit !== 1 && (
+        <span className="text-[10px] font-mono text-neon-yellow/60">
+          {formatYusd(amount * chipUnit)}
+        </span>
+      )}
     </motion.div>
   );
 }
