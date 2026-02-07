@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@theme {
+  --color-neon-green: #39ff14;
+  --color-neon-pink: #ff6ec7;
+  --color-neon-blue: #00f0ff;
+  --color-neon-purple: #bf5fff;
+  --color-neon-yellow: #fff01f;
+  --color-felt: #1a5c2a;
+  --color-felt-dark: #0f3d1a;
+  --color-surface: #1a1b2e;
+  --color-surface-light: #252642;
+  --color-surface-lighter: #2f3055;
+}
+
+body {
+  margin: 0;
+  background: #0d0e1a;
+  color: white;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  min-height: 100vh;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Neon glow utilities */
+.glow-green {
+  box-shadow: 0 0 20px rgba(57, 255, 20, 0.3);
+}
+.glow-pink {
+  box-shadow: 0 0 20px rgba(255, 110, 199, 0.3);
+}
+.glow-blue {
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+}
+
+/* Pulse animation for active player */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(0, 240, 255, 0.6);
+  }
+}
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Card flip */
+.card-back {
+  background: linear-gradient(135deg, #2a1f5e 0%, #4a2d8a 50%, #2a1f5e 100%);
+}
+
+/* Felt texture */
+.felt {
+  background:
+    radial-gradient(
+      ellipse at center,
+      var(--color-felt) 0%,
+      var(--color-felt-dark) 100%
+    );
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}

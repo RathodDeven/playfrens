@@ -1,0 +1,18 @@
+import { motion } from "motion/react";
+
+export function ChipStack({ amount }: { amount: number }) {
+  if (amount === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-center gap-1 px-2 py-1 rounded-full bg-neon-yellow/10 border border-neon-yellow/20"
+    >
+      <div className="w-3 h-3 rounded-full bg-gradient-to-br from-neon-yellow to-yellow-600 border border-yellow-500/50" />
+      <span className="text-xs font-bold font-mono text-neon-yellow">
+        {amount}
+      </span>
+    </motion.div>
+  );
+}
