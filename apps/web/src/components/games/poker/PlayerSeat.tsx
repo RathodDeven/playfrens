@@ -1,8 +1,8 @@
+import type { PokerCard, SeatState } from "@playfrens/shared";
 import { motion } from "motion/react";
-import type { SeatState, PokerCard } from "@playfrens/shared";
+import { formatYusd } from "../../../lib/format";
 import { Card } from "./Card";
 import { ChipStack } from "./ChipStack";
-import { formatYusd } from "../../../lib/format";
 
 export function PlayerSeat({
   seat,
@@ -16,8 +16,7 @@ export function PlayerSeat({
   chipUnit: number;
 }) {
   const displayName =
-    seat.ensName ||
-    `${seat.address.slice(0, 6)}...${seat.address.slice(-4)}`;
+    seat.ensName || `${seat.address.slice(0, 6)}...${seat.address.slice(-4)}`;
 
   return (
     <motion.div
@@ -34,11 +33,17 @@ export function PlayerSeat({
       <div className="flex gap-1">
         {isHero && holeCards
           ? holeCards.map((card, i) => (
-              <Card key={`${card.rank}-${card.suit}`} card={card} delay={i * 0.15} />
+              <Card
+                key={`${card.rank}-${card.suit}`}
+                card={card}
+                delay={i * 0.15}
+              />
             ))
           : seat.isFolded
             ? null
-            : [0, 1].map((i) => <Card key={`hidden-${i}`} faceDown delay={i * 0.15} />)}
+            : [0, 1].map((i) => (
+                <Card key={`hidden-${i}`} faceDown delay={i * 0.15} />
+              ))}
       </div>
 
       {/* Bet */}

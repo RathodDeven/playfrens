@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { formatYusd } from "../../lib/format";
 
@@ -47,9 +47,7 @@ export function DepositModal({
             className="glass rounded-2xl p-8 max-w-md w-full mx-4 space-y-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-2xl font-bold text-white">
-              Get Test Tokens
-            </h2>
+            <h2 className="text-2xl font-bold text-white">Get Test Tokens</h2>
 
             <div className="space-y-2">
               <div className="flex justify-between items-center px-4 py-3 rounded-xl bg-surface-light">
@@ -65,11 +63,7 @@ export function DepositModal({
               ytest.usd deposited into your Yellow Network state channel.
             </p>
 
-            {error && (
-              <p className="text-sm text-red-400">
-                {error}
-              </p>
-            )}
+            {error && <p className="text-sm text-red-400">{error}</p>}
 
             <div className="flex gap-3">
               <motion.button

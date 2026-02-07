@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import type { Socket } from "socket.io-client";
 import {
   EVENTS,
   type HandResult,
   type PokerAction,
   type PokerPlayerState,
 } from "@playfrens/shared";
+import { useCallback, useEffect, useState } from "react";
+import type { Socket } from "socket.io-client";
 
 interface UseGameStateReturn {
   gameState: PokerPlayerState | null;

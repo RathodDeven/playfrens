@@ -1,17 +1,17 @@
 import "dotenv/config";
-import express from "express";
-import cors from "cors";
 import { createServer } from "node:http";
+import cors from "cors";
+import express from "express";
 import { Server } from "socket.io";
+import type { Hex } from "viem";
 import { RoomManager } from "./rooms/RoomManager.js";
 import { setupSocketHandlers } from "./socket/handlers.js";
 import { authMiddleware } from "./socket/middleware.js";
-import type { Hex } from "viem";
 import { createServerWallet, getServerAddress } from "./yellow/auth.js";
 import { YellowClient } from "./yellow/client.js";
 import { YellowSessionManager } from "./yellow/sessionManager.js";
 
-const PORT = parseInt(process.env.PORT || "3001", 10);
+const PORT = Number.parseInt(process.env.PORT || "3001", 10);
 
 const app = express();
 app.use(cors());
@@ -46,10 +46,7 @@ const yellowClient = new YellowClient(
   serverWallet,
   process.env.CLEARNODE_WS_URL,
 );
-const yellowSessions = new YellowSessionManager(
-  yellowClient,
-  serverAddress,
-);
+const yellowSessions = new YellowSessionManager(yellowClient, serverAddress);
 
 yellowClient.connect().catch((err) => {
   console.error("[Yellow] Failed to connect:", err);

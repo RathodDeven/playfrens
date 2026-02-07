@@ -1,4 +1,3 @@
-import * as Poker from "poker-ts";
 import type {
   GameType,
   HandResult,
@@ -11,6 +10,7 @@ import type {
   RoomConfig,
   SeatState,
 } from "@playfrens/shared";
+import * as Poker from "poker-ts";
 import { GameRoom } from "../GameRoom.js";
 
 interface SeatedPlayer {
@@ -155,7 +155,8 @@ export class PokerRoom extends GameRoom {
         chipCount: (seat as any).stack ?? (seat as any).chipStack ?? 0,
         betAmount: (seat as any).betSize ?? 0,
         isFolded: (seat as any).folded ?? false,
-        isAllIn: ((seat as any).stack ?? 0) === 0 && !((seat as any).folded ?? false),
+        isAllIn:
+          ((seat as any).stack ?? 0) === 0 && !((seat as any).folded ?? false),
         isDealer: this.table.isHandInProgress()
           ? this.table.button() === i
           : false,
@@ -171,8 +172,11 @@ export class PokerRoom extends GameRoom {
     let dealerSeat = 0;
 
     if (this.table.isHandInProgress()) {
-      communityCards = this.table.communityCards().map((c: any) => this.mapCard(c));
-      roundOfBetting = this.table.roundOfBetting() as PokerGameState["roundOfBetting"];
+      communityCards = this.table
+        .communityCards()
+        .map((c: any) => this.mapCard(c));
+      roundOfBetting =
+        this.table.roundOfBetting() as PokerGameState["roundOfBetting"];
       dealerSeat = this.table.button();
       if (this.table.isBettingRoundInProgress()) {
         currentPlayerSeat = this.table.playerToAct();

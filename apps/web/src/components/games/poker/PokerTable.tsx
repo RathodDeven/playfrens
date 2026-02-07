@@ -1,23 +1,23 @@
-import { motion, AnimatePresence } from "motion/react";
 import type {
   HandResult,
   PokerAction,
   PokerPlayerState,
 } from "@playfrens/shared";
 import { REACTIONS } from "@playfrens/shared";
-import { PlayerSeat } from "./PlayerSeat";
-import { CommunityCards } from "./CommunityCards";
-import { PotDisplay } from "./PotDisplay";
-import { ActionBar } from "./ActionBar";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { formatYusd } from "../../../lib/format";
+import { ActionBar } from "./ActionBar";
+import { CommunityCards } from "./CommunityCards";
+import { PlayerSeat } from "./PlayerSeat";
+import { PotDisplay } from "./PotDisplay";
 
 // Seat positions around an oval table (6 seats)
 const seatPositions = [
   { top: "85%", left: "50%", transform: "translate(-50%, -50%)" }, // 0: bottom center (hero default)
-  { top: "65%", left: "5%", transform: "translate(0, -50%)" },    // 1: bottom left
-  { top: "15%", left: "5%", transform: "translate(0, -50%)" },    // 2: top left
-  { top: "5%", left: "50%", transform: "translate(-50%, 0)" },    // 3: top center
+  { top: "65%", left: "5%", transform: "translate(0, -50%)" }, // 1: bottom left
+  { top: "15%", left: "5%", transform: "translate(0, -50%)" }, // 2: top left
+  { top: "5%", left: "50%", transform: "translate(-50%, 0)" }, // 3: top center
   { top: "15%", left: "95%", transform: "translate(-100%, -50%)" }, // 4: top right
   { top: "65%", left: "95%", transform: "translate(-100%, -50%)" }, // 5: bottom right
 ];
@@ -51,12 +51,12 @@ export function PokerTable({
   }, [lastHandResult, heroSeatIndex]);
 
   const isHeroTurn =
-    gameState.isHandInProgress &&
-    gameState.currentPlayerSeat === heroSeatIndex;
+    gameState.isHandInProgress && gameState.currentPlayerSeat === heroSeatIndex;
 
   const chipUnit = gameState.chipUnit || 1;
 
-  const canStartHand = !gameState.isHandInProgress && gameState.seats.length >= 2;
+  const canStartHand =
+    !gameState.isHandInProgress && gameState.seats.length >= 2;
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">

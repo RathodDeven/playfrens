@@ -67,10 +67,17 @@ export class YellowSessionManager {
 
     const allocations = new Map<string, number>();
     for (const address of participants) {
-      allocations.set(address, roundAmount(room.config.buyIn * room.config.chipUnit));
+      allocations.set(
+        address,
+        roundAmount(room.config.buyIn * room.config.chipUnit),
+      );
     }
 
-    await this.client.submitAppState(sessionId, toRecord(allocations), "operate");
+    await this.client.submitAppState(
+      sessionId,
+      toRecord(allocations),
+      "operate",
+    );
 
     const session: RoomSession = {
       sessionId,

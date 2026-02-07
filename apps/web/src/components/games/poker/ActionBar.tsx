@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { motion } from "motion/react";
 import type { LegalAction, PokerAction } from "@playfrens/shared";
+import { motion } from "motion/react";
+import { useState } from "react";
 import { formatYusd } from "../../../lib/format";
 
 const actionStyles: Record<

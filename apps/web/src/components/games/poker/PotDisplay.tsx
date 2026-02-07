@@ -1,5 +1,5 @@
-import { motion, AnimatePresence } from "motion/react";
 import type { PotInfo } from "@playfrens/shared";
+import { AnimatePresence, motion } from "motion/react";
 import { formatYusd } from "../../../lib/format";
 
 export function PotDisplay({
@@ -33,7 +33,8 @@ export function PotDisplay({
                 key={`pot-${pot.amount}-${i}`}
                 className="text-xs text-white/40"
               >
-                {i === 0 ? "Main" : `Side ${i}`}: {formatYusd(pot.amount * chipUnit)} ytest.usd
+                {i === 0 ? "Main" : `Side ${i}`}:{" "}
+                {formatYusd(pot.amount * chipUnit)} ytest.usd
               </span>
             ))}
           </div>
@@ -52,13 +53,7 @@ function ChipIcon() {
       fill="none"
       className="text-neon-yellow"
     >
-      <circle
-        cx="8"
-        cy="8"
-        r="7"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
+      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" />
       <circle cx="8" cy="8" r="4" fill="currentColor" opacity="0.3" />
     </svg>
   );

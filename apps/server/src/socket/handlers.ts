@@ -1,13 +1,9 @@
-import type { Server, Socket } from "socket.io";
 import { EVENTS, type PokerAction } from "@playfrens/shared";
-import type { RoomManager } from "../rooms/RoomManager.js";
+import type { Server, Socket } from "socket.io";
 import type { PokerRoom } from "../games/poker/PokerRoom.js";
+import type { RoomManager } from "../rooms/RoomManager.js";
 import type { YellowSessionManager } from "../yellow/sessionManager.js";
-import {
-  registerSocket,
-  unregisterSocket,
-  getAddressForSocket,
-} from "./middleware.js";
+import { registerSocket, unregisterSocket } from "./middleware.js";
 
 // Track which socket is in which room, and which seat
 const socketRooms = new Map<string, { roomId: string; seatIndex: number }>();
@@ -21,14 +17,17 @@ export function setupSocketHandlers(
     console.log(`[Socket] Connected: ${socket.id}`);
 
     // Register wallet address
-    socket.on(EVENTS.REGISTER, (data: { address: string; ensName?: string; ensAvatar?: string }) => {
-      registerSocket(socket.id, data.address);
-      socket.data.address = data.address.toLowerCase();
-      socket.data.ensName = data.ensName;
-      socket.data.ensAvatar = data.ensAvatar;
-      socket.emit(EVENTS.REGISTERED, { address: data.address });
-      console.log(`[Socket] Registered: ${data.address}`);
-    });
+    socket.on(
+      EVENTS.REGISTER,
+      (data: { address: string; ensName?: string; ensAvatar?: string }) => {
+        registerSocket(socket.id, data.address);
+        socket.data.address = data.address.toLowerCase();
+        socket.data.ensName = data.ensName;
+        socket.data.ensAvatar = data.ensAvatar;
+        socket.emit(EVENTS.REGISTERED, { address: data.address });
+        console.log(`[Socket] Registered: ${data.address}`);
+      },
+    );
 
     // Create room
     socket.on(
@@ -62,7 +61,9 @@ export function setupSocketHandlers(
               if (room) {
                 yellowSessions
                   .submitHandAllocations(room)
-                  .catch((err) => console.error("[Yellow] Submit failed:", err));
+                  .catch((err) =>
+                    console.error("[Yellow] Submit failed:", err),
+                  );
               }
             },
           );
@@ -96,7 +97,10 @@ export function setupSocketHandlers(
             return;
           }
 
-          if (room.status !== "waiting" || yellowSessions.hasSession(room.roomId)) {
+          if (
+            room.status !== "waiting" ||
+            yellowSessions.hasSession(room.roomId)
+          ) {
             socket.emit(EVENTS.ERROR, { message: "Table already started" });
             return;
           }
@@ -276,7 +280,13 @@ export function setupSocketHandlers(
     socket.on("disconnect", () => {
       const roomInfo = socketRooms.get(socket.id);
       if (roomInfo) {
-        handleLeaveRoom(socket, io, roomManager, yellowSessions, roomInfo.roomId);
+        handleLeaveRoom(
+          socket,
+          io,
+          roomManager,
+          yellowSessions,
+          roomInfo.roomId,
+        );
       }
       unregisterSocket(socket.id);
       console.log(`[Socket] Disconnected: ${socket.id}`);

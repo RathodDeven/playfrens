@@ -1,13 +1,13 @@
-import { useAccount, useEnsName, useEnsAvatar } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { AnimatePresence, motion } from "motion/react";
+import { useAccount, useEnsAvatar, useEnsName } from "wagmi";
 import { mainnet } from "wagmi/chains";
-import { useSocket } from "./hooks/useSocket";
-import { useGameState } from "./hooks/useGameState";
-import { useYellow } from "./hooks/useYellow";
+import { PokerTable } from "./components/games/poker/PokerTable";
 import { Header } from "./components/layout/Header";
 import { Lobby } from "./components/lobby/Lobby";
-import { PokerTable } from "./components/games/poker/PokerTable";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { motion, AnimatePresence } from "motion/react";
+import { useGameState } from "./hooks/useGameState";
+import { useSocket } from "./hooks/useSocket";
+import { useYellow } from "./hooks/useYellow";
 
 export function App() {
   const { address, isConnected } = useAccount();
@@ -57,8 +57,8 @@ export function App() {
             PlayFrens
           </h1>
           <p className="text-white/50 text-xl max-w-md">
-            Play poker with your frens on-chain. Instant, gasless,
-            powered by Yellow Network state channels.
+            Play poker with your frens on-chain. Instant, gasless, powered by
+            Yellow Network state channels.
           </p>
         </motion.div>
         <motion.div

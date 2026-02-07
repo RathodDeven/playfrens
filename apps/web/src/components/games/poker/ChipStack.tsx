@@ -1,7 +1,10 @@
 import { motion } from "motion/react";
 import { formatYusd } from "../../../lib/format";
 
-export function ChipStack({ amount, chipUnit }: { amount: number; chipUnit: number }) {
+export function ChipStack({
+  amount,
+  chipUnit,
+}: { amount: number; chipUnit: number }) {
   if (amount === 0) return null;
 
   return (

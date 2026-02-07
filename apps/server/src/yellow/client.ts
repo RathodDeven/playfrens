@@ -1,6 +1,6 @@
-import WebSocket from "ws";
-import type { Hex, WalletClient } from "viem";
 import { CLEARNODE_WS_URL } from "@playfrens/shared";
+import type { WalletClient } from "viem";
+import WebSocket from "ws";
 import { signAuthChallenge } from "./auth.js";
 
 type MessageHandler = (data: any) => void;
@@ -66,10 +66,7 @@ export class YellowClient {
     });
 
     // Step 2: Sign the challenge
-    const signature = await signAuthChallenge(
-      this.wallet,
-      authReq.challenge,
-    );
+    const signature = await signAuthChallenge(this.wallet, authReq.challenge);
 
     // Step 3: Verify
     await this.sendRequest("auth_verify", {

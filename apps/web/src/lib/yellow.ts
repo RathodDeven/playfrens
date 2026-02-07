@@ -1,13 +1,12 @@
 import { CLEARNODE_WS_URL } from "@playfrens/shared";
 
-const WS_URL =
-  import.meta.env.VITE_CLEARNODE_WS_URL || CLEARNODE_WS_URL;
+const WS_URL = import.meta.env.VITE_CLEARNODE_WS_URL || CLEARNODE_WS_URL;
 
 export async function getYellowBalance(address: string): Promise<string> {
   // Query balance via Clearnode WebSocket
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(WS_URL);
-    let requestId = 1;
+    const requestId = 1;
 
     ws.onopen = () => {
       ws.send(

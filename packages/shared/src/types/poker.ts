@@ -21,12 +21,7 @@ export interface PokerCard {
 
 export type PokerAction = "fold" | "check" | "call" | "bet" | "raise";
 
-export type RoundOfBetting =
-  | "preflop"
-  | "flop"
-  | "turn"
-  | "river"
-  | "showdown";
+export type RoundOfBetting = "preflop" | "flop" | "turn" | "river" | "showdown";
 
 export interface SeatState {
   seatIndex: number;

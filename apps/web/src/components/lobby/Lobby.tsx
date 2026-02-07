@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { motion } from "motion/react";
 import { CHIP_UNITS, GAME_DEFAULTS } from "@playfrens/shared";
-import { FriendSearch } from "./FriendSearch";
-import { DepositModal } from "./DepositModal";
+import { motion } from "motion/react";
+import { useState } from "react";
 import { formatYusd } from "../../lib/format";
+import { DepositModal } from "./DepositModal";
+import { FriendSearch } from "./FriendSearch";
 
 export function Lobby({
   onCreateRoom,
@@ -25,8 +25,12 @@ export function Lobby({
   const [joinCode, setJoinCode] = useState("");
   const [showDeposit, setShowDeposit] = useState(false);
   const [buyIn, setBuyIn] = useState<number>(GAME_DEFAULTS.DEFAULT_BUY_IN);
-  const [smallBlind, setSmallBlind] = useState<number>(GAME_DEFAULTS.DEFAULT_SMALL_BLIND);
-  const [bigBlind, setBigBlind] = useState<number>(GAME_DEFAULTS.DEFAULT_BIG_BLIND);
+  const [smallBlind, setSmallBlind] = useState<number>(
+    GAME_DEFAULTS.DEFAULT_SMALL_BLIND,
+  );
+  const [bigBlind, setBigBlind] = useState<number>(
+    GAME_DEFAULTS.DEFAULT_BIG_BLIND,
+  );
   const [chipUnit, setChipUnit] = useState<number>(
     GAME_DEFAULTS.DEFAULT_CHIP_UNIT,
   );
@@ -126,7 +130,9 @@ export function Lobby({
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-white/40">Buy-in (ytest.usd)</label>
+              <label className="text-xs text-white/40">
+                Buy-in (ytest.usd)
+              </label>
               <div className="px-3 py-2 rounded-lg bg-surface-light border border-white/10 text-white text-sm">
                 {formatYusd(buyIn * chipUnit)} ytest.usd
               </div>
