@@ -140,9 +140,20 @@ export function setupSocketHandlers(
             return;
           }
 
+          // Auto-assign next available seat if client sends -1
+          const pokerRoom = room as PokerRoom;
+          let assignedSeat = data.seatIndex;
+          if (assignedSeat < 0) {
+            assignedSeat = pokerRoom.getNextAvailableSeat();
+            if (assignedSeat < 0) {
+              socket.emit(EVENTS.ERROR, { message: "Table is full" });
+              return;
+            }
+          }
+
           room.addPlayer(
             address,
-            data.seatIndex,
+            assignedSeat,
             room.config.buyIn,
             socket.data.ensName,
             socket.data.ensAvatar,
@@ -151,23 +162,22 @@ export function setupSocketHandlers(
           socket.join(data.roomId);
           socketRooms.set(socket.id, {
             roomId: data.roomId,
-            seatIndex: data.seatIndex,
+            seatIndex: assignedSeat,
           });
 
           // Notify everyone in the room
           io.to(data.roomId).emit(EVENTS.PLAYER_JOINED, {
-            seatIndex: data.seatIndex,
+            seatIndex: assignedSeat,
             address,
             ensName: socket.data.ensName,
             ensAvatar: socket.data.ensAvatar,
           });
 
-          // Send current game state to the new player
-          const playerState = room.getPlayerState(data.seatIndex);
-          socket.emit(EVENTS.GAME_STATE, playerState);
+          // Broadcast game state to ALL players so host sees the join
+          broadcastGameState(io, data.roomId, roomManager);
 
           console.log(
-            `[Room] ${address} joined ${data.roomId} at seat ${data.seatIndex}`,
+            `[Room] ${address} joined ${data.roomId} at seat ${assignedSeat}`,
           );
         } catch (err: any) {
           socket.emit(EVENTS.ERROR, { message: err.message });
@@ -218,9 +228,20 @@ export function setupSocketHandlers(
       handleLeaveRoom(socket, io, roomManager, yellowSessions, data.roomId);
     });
 
-    // Start hand
+    // Start hand — only host (seat 0) can start
     socket.on(EVENTS.START_HAND, async (data: { roomId: string }) => {
       try {
+        const roomInfo = socketRooms.get(socket.id);
+        if (!roomInfo || roomInfo.roomId !== data.roomId) {
+          socket.emit(EVENTS.ERROR, { message: "Not in this room" });
+          return;
+        }
+
+        if (roomInfo.seatIndex !== 0) {
+          socket.emit(EVENTS.ERROR, { message: "Only the host can start a hand" });
+          return;
+        }
+
         const room = roomManager.getRoom(data.roomId);
         if (!room) {
           socket.emit(EVENTS.ERROR, { message: "Room not found" });
@@ -355,6 +376,9 @@ function handleLeaveRoom(
     io.to(roomId).emit(EVENTS.PLAYER_LEFT, {
       seatIndex: roomInfo.seatIndex,
     });
+
+    // Broadcast updated game state to remaining players
+    broadcastGameState(io, roomId, roomManager);
 
     // Delete room if empty
     if (room.getPlayerCount() === 0) {

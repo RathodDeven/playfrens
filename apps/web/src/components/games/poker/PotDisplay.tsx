@@ -23,7 +23,7 @@ export function PotDisplay({
         <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-neon-yellow/20 border border-neon-yellow/30">
           <ChipIcon />
           <span className="font-bold text-neon-yellow font-mono">
-            {formatYusd(totalPot * chipUnit)} ytest.usd
+            {totalPot} chips ({formatYusd(totalPot * chipUnit)})
           </span>
         </div>
         {pots.length > 1 && (
@@ -33,8 +33,8 @@ export function PotDisplay({
                 key={`pot-${pot.amount}-${i}`}
                 className="text-xs text-white/40"
               >
-                {i === 0 ? "Main" : `Side ${i}`}:{" "}
-                {formatYusd(pot.amount * chipUnit)} ytest.usd
+                {i === 0 ? "Main" : `Side ${i}`}: {pot.amount} (
+                {formatYusd(pot.amount * chipUnit)})
               </span>
             ))}
           </div>

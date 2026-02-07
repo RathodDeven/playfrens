@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWalletClient } from "wagmi";
 import { requestFaucetTokens } from "../lib/yellow";
 import { YellowRpcClient } from "../lib/yellowRpc";
@@ -8,7 +8,9 @@ export function useYellow(address?: string) {
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const { data: walletClient } = useWalletClient();
+  const authAttempted = useRef(false);
 
   const client = useMemo(() => {
     if (!walletClient || !address) return null;
@@ -24,14 +26,53 @@ export function useYellow(address?: string) {
   useEffect(() => {
     setIsAuthorized(false);
     setBalance("0");
+    setAuthError(null);
+    authAttempted.current = false;
   }, [address]);
 
-  const authorize = useCallback(async () => {
+  // Auto-authorize when client becomes available
+  useEffect(() => {
+    if (!client || authAttempted.current) return;
+    authAttempted.current = true;
+
+    let cancelled = false;
+    setIsAuthorizing(true);
+    setAuthError(null);
+
+    client
+      .authorize()
+      .then(() => {
+        if (!cancelled) {
+          setIsAuthorized(true);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("[Yellow] Auto-authorize failed:", err);
+          setAuthError(err?.message ?? "Authorization failed");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsAuthorizing(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  const retryAuth = useCallback(async () => {
     if (!client) throw new Error("Wallet not ready");
     setIsAuthorizing(true);
+    setAuthError(null);
     try {
       await client.authorize();
       setIsAuthorized(true);
+    } catch (err: any) {
+      setAuthError(err?.message ?? "Authorization failed");
+      throw err;
     } finally {
       setIsAuthorizing(false);
     }
@@ -65,8 +106,9 @@ export function useYellow(address?: string) {
     isLoading,
     isAuthorized,
     isAuthorizing,
+    authError,
+    retryAuth,
     refetchBalance: fetchBalance,
-    authorize,
     requestTokens: async () => {
       if (!address) throw new Error("Wallet not connected");
       await requestFaucetTokens(address);

@@ -7,24 +7,25 @@ import { REACTIONS } from "@playfrens/shared";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { formatYusd } from "../../../lib/format";
+import type { HandHistoryEntry } from "../../../hooks/useGameState";
 import { ActionBar } from "./ActionBar";
 import { CommunityCards } from "./CommunityCards";
+import { HandHistory } from "./HandHistory";
 import { PlayerSeat } from "./PlayerSeat";
 import { PotDisplay } from "./PotDisplay";
 
-// Seat positions around an oval table (6 seats)
+// 4-seat positions: bottom (hero), left, top, right
 const seatPositions = [
-  { top: "85%", left: "50%", transform: "translate(-50%, -50%)" }, // 0: bottom center (hero default)
-  { top: "65%", left: "5%", transform: "translate(0, -50%)" }, // 1: bottom left
-  { top: "15%", left: "5%", transform: "translate(0, -50%)" }, // 2: top left
-  { top: "5%", left: "50%", transform: "translate(-50%, 0)" }, // 3: top center
-  { top: "15%", left: "95%", transform: "translate(-100%, -50%)" }, // 4: top right
-  { top: "65%", left: "95%", transform: "translate(-100%, -50%)" }, // 5: bottom right
+  { top: "85%", left: "50%", transform: "translate(-50%, -50%)" }, // 0: bottom center (hero)
+  { top: "50%", left: "5%", transform: "translate(0, -50%)" },    // 1: left center
+  { top: "5%", left: "50%", transform: "translate(-50%, 0)" },    // 2: top center
+  { top: "50%", left: "95%", transform: "translate(-100%, -50%)" }, // 3: right center
 ];
 
 export function PokerTable({
   gameState,
   lastHandResult,
+  handHistory,
   heroSeatIndex,
   onAction,
   onStartHand,
@@ -32,6 +33,7 @@ export function PokerTable({
 }: {
   gameState: PokerPlayerState;
   lastHandResult: HandResult | null;
+  handHistory: HandHistoryEntry[];
   heroSeatIndex: number;
   onAction: (action: PokerAction, betSize?: number) => void;
   onStartHand: () => void;
@@ -55,8 +57,11 @@ export function PokerTable({
 
   const chipUnit = gameState.chipUnit || 1;
 
+  // Only host (seat 0) can start hands
   const canStartHand =
-    !gameState.isHandInProgress && gameState.seats.length >= 2;
+    !gameState.isHandInProgress &&
+    gameState.seats.length >= 2 &&
+    heroSeatIndex === 0;
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">
@@ -79,29 +84,33 @@ export function PokerTable({
             <PotDisplay pots={gameState.pots} chipUnit={chipUnit} />
           </div>
 
-          {/* Player Seats */}
+          {/* Player Seats — hero rotation */}
           <AnimatePresence>
-            {gameState.seats.map((seat) => (
-              <div
-                key={seat.seatIndex}
-                className="absolute"
-                style={seatPositions[seat.seatIndex % 6]}
-              >
-                <PlayerSeat
-                  seat={seat}
-                  isHero={seat.seatIndex === heroSeatIndex}
-                  holeCards={
-                    seat.seatIndex === heroSeatIndex
-                      ? gameState.holeCards
-                      : undefined
-                  }
-                  chipUnit={chipUnit}
-                />
-              </div>
-            ))}
+            {gameState.seats.map((seat) => {
+              const positionIndex =
+                (seat.seatIndex - heroSeatIndex + 4) % 4;
+              return (
+                <div
+                  key={seat.seatIndex}
+                  className="absolute"
+                  style={seatPositions[positionIndex]}
+                >
+                  <PlayerSeat
+                    seat={seat}
+                    isHero={seat.seatIndex === heroSeatIndex}
+                    holeCards={
+                      seat.seatIndex === heroSeatIndex
+                        ? gameState.holeCards
+                        : undefined
+                    }
+                    chipUnit={chipUnit}
+                  />
+                </div>
+              );
+            })}
           </AnimatePresence>
 
-          {/* Start hand button */}
+          {/* Start hand button — only for host */}
           {canStartHand && (
             <motion.button
               initial={{ opacity: 0, scale: 0.8 }}
@@ -133,7 +142,7 @@ export function PokerTable({
                         : `Seat ${w.seatIndex} wins!`}
                     </p>
                     <p className="text-neon-yellow font-mono">
-                      +{formatYusd(w.amount * chipUnit)} ytest.usd
+                      +{w.amount} chips ({formatYusd(w.amount * chipUnit)} ytest.usd)
                     </p>
                     {w.hand && (
                       <p className="text-white/50 text-sm">{w.hand}</p>
@@ -147,6 +156,9 @@ export function PokerTable({
           {/* Confetti */}
           {showConfetti && <Confetti />}
         </div>
+
+        {/* Hand History sidebar */}
+        <HandHistory entries={handHistory} chipUnit={chipUnit} />
       </div>
 
       {/* Bottom bar */}

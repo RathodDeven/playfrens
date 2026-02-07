@@ -7,9 +7,18 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import type { Socket } from "socket.io-client";
 
+export interface HandHistoryEntry {
+  handNumber: number;
+  winners: Array<{ seatIndex: number; amount: number; hand?: string }>;
+  pots: Array<{ amount: number; eligibleSeats: number[] }>;
+  chipUnit: number;
+  timestamp: number;
+}
+
 interface UseGameStateReturn {
   gameState: PokerPlayerState | null;
   lastHandResult: HandResult | null;
+  handHistory: HandHistoryEntry[];
   roomId: string | null;
   seatIndex: number | null;
   error: string | null;
@@ -33,13 +42,28 @@ interface UseGameStateReturn {
 export function useGameState(socket: Socket): UseGameStateReturn {
   const [gameState, setGameState] = useState<PokerPlayerState | null>(null);
   const [lastHandResult, setLastHandResult] = useState<HandResult | null>(null);
+  const [handHistory, setHandHistory] = useState<HandHistoryEntry[]>([]);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [seatIndex, setSeatIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Track pending join so we know when to extract seatIndex from PLAYER_JOINED
+  const [, setPendingJoin] = useState(false);
 
   useEffect(() => {
     function onGameState(state: PokerPlayerState) {
       setGameState(state);
+
+      // If we just joined and are waiting for our seat assignment
+      setPendingJoin((pending) => {
+        if (pending) {
+          // Find our seat — server sends personalized state, so we can detect
+          // the seat that was assigned by looking at the state
+          // The server assigns us a seat and broadcasts state for that seat
+          // Our seatIndex comes from ROOM_CREATED or PLAYER_JOINED
+          return false;
+        }
+        return pending;
+      });
     }
 
     function onRoomCreated(data: { roomId: string; seatIndex?: number }) {
@@ -49,8 +73,34 @@ export function useGameState(socket: Socket): UseGameStateReturn {
       }
     }
 
+    function onPlayerJoined(data: { seatIndex: number; address: string }) {
+      // If this is our join (we have a pending join and this matches), set our seat
+      setPendingJoin((pending) => {
+        if (pending) {
+          setSeatIndex(data.seatIndex);
+          return false;
+        }
+        return pending;
+      });
+    }
+
     function onHandComplete(result: HandResult) {
       setLastHandResult(result);
+
+      // Add to hand history if it has a hand number (real hand result, not start signal)
+      if (result.handNumber && result.winners?.length > 0) {
+        const handNum = result.handNumber;
+        setHandHistory((prev) => [
+          {
+            handNumber: handNum,
+            winners: result.winners,
+            pots: result.pots,
+            chipUnit: result.chipUnit ?? 1,
+            timestamp: Date.now(),
+          },
+          ...prev,
+        ]);
+      }
     }
 
     function onPlayerLeft(data: { seatIndex: number }) {
@@ -59,11 +109,14 @@ export function useGameState(socket: Socket): UseGameStateReturn {
         setSeatIndex(null);
         setGameState(null);
         setLastHandResult(null);
+        setHandHistory([]);
       }
     }
 
     function onError(data: { message: string }) {
       setError(data.message);
+      // If we had a pending join that failed, clear it
+      setPendingJoin(false);
     }
 
     function onCashedOut() {
@@ -71,10 +124,12 @@ export function useGameState(socket: Socket): UseGameStateReturn {
       setSeatIndex(null);
       setGameState(null);
       setLastHandResult(null);
+      setHandHistory([]);
     }
 
     socket.on(EVENTS.GAME_STATE, onGameState);
     socket.on(EVENTS.ROOM_CREATED, onRoomCreated);
+    socket.on(EVENTS.PLAYER_JOINED, onPlayerJoined);
     socket.on(EVENTS.HAND_COMPLETE, onHandComplete);
     socket.on(EVENTS.PLAYER_LEFT, onPlayerLeft);
     socket.on(EVENTS.ERROR, onError);
@@ -83,6 +138,7 @@ export function useGameState(socket: Socket): UseGameStateReturn {
     return () => {
       socket.off(EVENTS.GAME_STATE, onGameState);
       socket.off(EVENTS.ROOM_CREATED, onRoomCreated);
+      socket.off(EVENTS.PLAYER_JOINED, onPlayerJoined);
       socket.off(EVENTS.HAND_COMPLETE, onHandComplete);
       socket.off(EVENTS.PLAYER_LEFT, onPlayerLeft);
       socket.off(EVENTS.ERROR, onError);
@@ -106,7 +162,8 @@ export function useGameState(socket: Socket): UseGameStateReturn {
   const joinRoom = useCallback(
     (id: string, seat: number) => {
       setRoomId(id);
-      setSeatIndex(seat);
+      setPendingJoin(true);
+      // Don't set seatIndex here — wait for server's PLAYER_JOINED
       socket.emit(EVENTS.JOIN_ROOM, { roomId: id, seatIndex: seat });
     },
     [socket],
@@ -162,6 +219,7 @@ export function useGameState(socket: Socket): UseGameStateReturn {
   return {
     gameState,
     lastHandResult,
+    handHistory,
     roomId,
     seatIndex,
     error,

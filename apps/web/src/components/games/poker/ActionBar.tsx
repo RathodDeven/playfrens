@@ -61,7 +61,7 @@ export function ActionBar({
       {betAction && (
         <div className="flex items-center gap-3 px-4 py-2 rounded-xl glass">
           <span className="text-sm text-white/50 font-mono">
-            {formatYusd((betAction.minBet || 0) * chipUnit)}
+            {betAction.minBet || 0}
           </span>
           <input
             type="range"
@@ -72,7 +72,7 @@ export function ActionBar({
             className="w-40 accent-neon-green"
           />
           <span className="text-sm text-white/50 font-mono">
-            {formatYusd((betAction.maxBet || 0) * chipUnit)}
+            {betAction.maxBet || 0}
           </span>
           <input
             type="number"
@@ -80,6 +80,9 @@ export function ActionBar({
             onChange={(e) => setBetSize(Number(e.target.value))}
             className="w-20 px-2 py-1 rounded-lg bg-surface-light border border-white/10 text-white text-center text-sm font-mono"
           />
+          <span className="text-xs text-white/30">
+            ({formatYusd((betSize || betAction.minBet || 0) * chipUnit)})
+          </span>
         </div>
       )}
 
@@ -104,7 +107,7 @@ export function ActionBar({
             >
               {style.label}
               {la.action === "call" && la.minBet
-                ? ` ${formatYusd(la.minBet * chipUnit)}`
+                ? ` ${la.minBet} (${formatYusd(la.minBet * chipUnit)})`
                 : ""}
             </motion.button>
           );

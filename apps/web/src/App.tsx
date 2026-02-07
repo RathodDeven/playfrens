@@ -31,6 +31,7 @@ export function App() {
   const {
     gameState,
     lastHandResult,
+    handHistory,
     roomId,
     seatIndex,
     error,
@@ -48,7 +49,8 @@ export function App() {
     balance,
     isAuthorized,
     isAuthorizing,
-    authorize,
+    authError,
+    retryAuth,
     refetchBalance,
     requestTokens,
   } = useYellow(address);
@@ -89,6 +91,50 @@ export function App() {
     );
   }
 
+  // Authorizing with Yellow Network
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center space-y-4"
+        >
+          <h1 className="text-4xl font-black bg-gradient-to-r from-neon-green via-neon-blue to-neon-pink bg-clip-text text-transparent">
+            PlayFrens
+          </h1>
+          {authError ? (
+            <>
+              <p className="text-red-400 text-lg">
+                Failed to authorize with Yellow Network
+              </p>
+              <p className="text-white/40 text-sm max-w-sm">{authError}</p>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => retryAuth().catch(() => {})}
+                className="px-6 py-3 rounded-xl bg-neon-blue/20 text-neon-blue font-bold hover:bg-neon-blue/30 transition-colors"
+              >
+                Retry Authorization
+              </motion.button>
+            </>
+          ) : (
+            <>
+              <p className="text-white/50 text-lg">
+                Authorizing with Yellow Network...
+              </p>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+                className="w-8 h-8 border-2 border-neon-blue border-t-transparent rounded-full mx-auto"
+              />
+            </>
+          )}
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header roomId={roomId} onLeaveRoom={leaveRoom} onCashOut={cashOut} />
@@ -113,6 +159,7 @@ export function App() {
         <PokerTable
           gameState={gameState}
           lastHandResult={lastHandResult}
+          handHistory={handHistory}
           heroSeatIndex={seatIndex ?? 0}
           onAction={sendAction}
           onStartHand={startHand}
@@ -128,12 +175,6 @@ export function App() {
           }}
           balance={balance}
           walletBalance={walletBalance}
-          isAuthorized={isAuthorized}
-          isAuthorizing={isAuthorizing}
-          onAuthorize={async () => {
-            await authorize();
-            await refetchBalance();
-          }}
           onDeposit={async () => {
             await requestTokens();
             await refetchBalance();

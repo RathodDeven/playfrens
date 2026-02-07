@@ -32,38 +32,26 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
-function sessionKeyStorageKey(address: string): string {
-  return `playfrens.yellow.sessionKey.${address.toLowerCase()}`;
-}
-
-function loadSessionKey(address: string): `0x${string}` | null {
-  const raw = localStorage.getItem(sessionKeyStorageKey(address));
-  if (!raw || !raw.startsWith("0x")) return null;
-  return raw as `0x${string}`;
-}
-
-function saveSessionKey(address: string, key: `0x${string}`): void {
-  localStorage.setItem(sessionKeyStorageKey(address), key);
-}
-
 export class YellowRpcClient {
   private ws: WebSocket | null = null;
   private authenticated = false;
   private pending = new Map<string, PendingRequest>();
   private connectPromise: Promise<void> | null = null;
-  private authParams: AuthParams | null = null;
   private sessionPrivateKey: `0x${string}`;
   private sessionSigner: ReturnType<typeof createECDSAMessageSigner>;
+
+  // Auth state (event-driven, like server)
+  private authResolve: (() => void) | null = null;
+  private authReject: ((err: Error) => void) | null = null;
+  private authTimeout: NodeJS.Timeout | null = null;
+  private authParams: AuthParams | null = null;
 
   constructor(
     private walletClient: WalletClient,
     private address: `0x${string}`,
   ) {
-    const stored = loadSessionKey(address);
-    this.sessionPrivateKey = stored ?? (generatePrivateKey() as `0x${string}`);
-    if (!stored) {
-      saveSessionKey(address, this.sessionPrivateKey);
-    }
+    // Always generate a fresh session key — never persist
+    this.sessionPrivateKey = generatePrivateKey() as `0x${string}`;
     this.sessionSigner = createECDSAMessageSigner(this.sessionPrivateKey);
   }
 
@@ -71,53 +59,84 @@ export class YellowRpcClient {
     await this.ensureConnected();
     if (this.authenticated) return;
 
-    const sessionAccount = privateKeyToAccount(this.sessionPrivateKey);
-    const authParams: AuthParams = {
-      session_key: sessionAccount.address,
-      allowances: DEFAULT_ALLOWANCES,
-      expires_at: BigInt(Math.floor(Date.now() / 1000) + 3600),
-      scope: APP_SCOPE,
-    };
-    this.authParams = authParams;
+    return new Promise<void>(async (resolve, reject) => {
+      this.authResolve = resolve;
+      this.authReject = reject;
 
-    const authRequest = await createAuthRequestMessage({
-      address: this.address,
-      application: APP_NAME,
-      ...authParams,
+      // Set auth timeout
+      this.authTimeout = setTimeout(() => {
+        if (!this.authenticated) {
+          const error = new Error("Auth timed out");
+          console.error("[Yellow] Auth timed out");
+          this.authReject?.(error);
+          this.authReject = null;
+          this.authResolve = null;
+        }
+      }, 15000);
+
+      try {
+        const sessionAccount = privateKeyToAccount(this.sessionPrivateKey);
+        const authParams: AuthParams = {
+          session_key: sessionAccount.address,
+          allowances: DEFAULT_ALLOWANCES,
+          expires_at: BigInt(Math.floor(Date.now() / 1000) + 3600),
+          scope: APP_SCOPE,
+        };
+        this.authParams = authParams;
+
+        const authRequest = await createAuthRequestMessage({
+          address: this.address,
+          application: APP_NAME,
+          ...authParams,
+        });
+
+        console.log("[Yellow] Sending auth_request", {
+          address: this.address,
+          session_key: authParams.session_key,
+          application: APP_NAME,
+          scope: authParams.scope,
+        });
+
+        this.ws?.send(authRequest);
+      } catch (err) {
+        if (this.authTimeout) {
+          clearTimeout(this.authTimeout);
+          this.authTimeout = null;
+        }
+        this.authResolve = null;
+        this.authReject = null;
+        reject(err);
+      }
     });
+  }
 
-    this.ws?.send(authRequest);
-
-    const challenge = await this.waitFor("auth_challenge", 12000);
-    const challengeMessage =
-      challenge?.challenge_message ?? challenge?.challenge ?? "";
-    if (!challengeMessage) {
-      throw new Error("Missing auth challenge");
-    }
-
-    const signer = createEIP712AuthMessageSigner(
-      this.walletClient,
-      authParams,
-      { name: APP_NAME },
-    );
-
-    const verifyMsg = await createAuthVerifyMessageFromChallenge(
-      signer,
-      challengeMessage,
-    );
-    this.ws?.send(verifyMsg);
-
-    const verifyResult = await this.waitFor("auth_verify", 12000);
-    if (!verifyResult?.success) {
-      throw new Error(verifyResult?.error ?? "Authentication failed");
-    }
-
-    this.authenticated = true;
+  private rotateSessionKey(): void {
+    this.sessionPrivateKey = generatePrivateKey() as `0x${string}`;
+    this.sessionSigner = createECDSAMessageSigner(this.sessionPrivateKey);
+    console.log("[Yellow] Rotated to new session key");
   }
 
   async getLedgerBalances(): Promise<Array<{ asset: string; amount: string }>> {
     await this.authorize();
 
+    try {
+      return await this._fetchLedgerBalances();
+    } catch (err: any) {
+      // If auth-related error, re-authorize and retry once
+      const msg = err?.message?.toLowerCase() ?? "";
+      if (msg.includes("auth") || msg.includes("expired") || msg.includes("unauthorized")) {
+        console.log("[Yellow] Auth error in getLedgerBalances, re-authorizing...");
+        this.authenticated = false;
+        this.rotateSessionKey();
+        this.disconnect();
+        await this.authorize();
+        return await this._fetchLedgerBalances();
+      }
+      throw err;
+    }
+  }
+
+  private async _fetchLedgerBalances(): Promise<Array<{ asset: string; amount: string }>> {
     const message = await createGetLedgerBalancesMessage(
       this.sessionSigner,
       this.address,
@@ -142,6 +161,10 @@ export class YellowRpcClient {
   }
 
   disconnect(): void {
+    if (this.authTimeout) {
+      clearTimeout(this.authTimeout);
+      this.authTimeout = null;
+    }
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -149,6 +172,8 @@ export class YellowRpcClient {
     this.authenticated = false;
     this.pending.clear();
     this.connectPromise = null;
+    this.authResolve = null;
+    this.authReject = null;
   }
 
   private async ensureConnected(): Promise<void> {
@@ -157,37 +182,142 @@ export class YellowRpcClient {
     this.connectPromise = new Promise((resolve, reject) => {
       this.ws = new WebSocket(WS_URL);
 
-      this.ws.onopen = () => resolve();
+      this.ws.onopen = () => {
+        console.log("[Yellow] Connected to Clearnode");
+        resolve();
+      };
       this.ws.onerror = () => {
+        this.connectPromise = null;
         reject(new Error("Failed to connect to Clearnode"));
       };
       this.ws.onclose = () => {
+        console.log("[Yellow] Disconnected from Clearnode");
         this.authenticated = false;
         this.connectPromise = null;
       };
       this.ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data.toString());
-          const method = message?.res?.[1];
-          const result = message?.res?.[2];
-          if (!method) return;
-
-          const pending = this.pending.get(method);
-          if (pending) {
-            this.pending.delete(method);
-            pending.resolve(result);
-          }
-        } catch (err) {
-          const pending = this.pending.get("error");
-          if (pending) {
-            this.pending.delete("error");
-            pending.reject(err as Error);
-          }
-        }
+        this.handleMessage(event.data);
       };
     });
 
     return this.connectPromise;
+  }
+
+  private handleMessage(data: any): void {
+    try {
+      const message = JSON.parse(typeof data === "string" ? data : data.toString());
+      const method = message?.res?.[1];
+      const result = message?.res?.[2];
+
+      if (!method) return;
+
+      console.log("[Yellow] Received:", method, result);
+
+      // Handle auth challenge — sign and send verify (event-driven, like server)
+      if (method === "auth_challenge") {
+        const challengeMessage =
+          result?.challenge_message ?? result?.challenge ?? "";
+        if (challengeMessage) {
+          void this.handleAuthChallenge(challengeMessage);
+        } else {
+          console.error("[Yellow] Empty auth challenge received");
+          this.authReject?.(new Error("Empty auth challenge"));
+          this.authReject = null;
+          this.authResolve = null;
+        }
+        return;
+      }
+
+      // Handle auth verify response
+      if (method === "auth_verify") {
+        if (result?.success) {
+          this.authenticated = true;
+          console.log("[Yellow] Authenticated successfully");
+          if (this.authTimeout) {
+            clearTimeout(this.authTimeout);
+            this.authTimeout = null;
+          }
+          this.authResolve?.();
+        } else {
+          const error = new Error(result?.error ?? "Authentication failed");
+          console.error("[Yellow] Auth failed:", error.message);
+          if (this.authTimeout) {
+            clearTimeout(this.authTimeout);
+            this.authTimeout = null;
+          }
+          this.authReject?.(error);
+        }
+        this.authResolve = null;
+        this.authReject = null;
+        return;
+      }
+
+      // Handle error responses — reject any pending waiters
+      if (method === "error") {
+        const errorMsg = result?.error ?? "Unknown Clearnode error";
+        console.error("[Yellow] Error from Clearnode:", errorMsg);
+
+        // If we're waiting for auth, reject the auth promise
+        if (this.authResolve || this.authReject) {
+          if (this.authTimeout) {
+            clearTimeout(this.authTimeout);
+            this.authTimeout = null;
+          }
+          this.authReject?.(new Error(errorMsg));
+          this.authResolve = null;
+          this.authReject = null;
+          return;
+        }
+
+        // Reject all pending waiters
+        for (const [key, pending] of this.pending.entries()) {
+          this.pending.delete(key);
+          pending.reject(new Error(errorMsg));
+        }
+        return;
+      }
+
+      // Handle other method responses via pending map
+      const pending = this.pending.get(method);
+      if (pending) {
+        this.pending.delete(method);
+        pending.resolve(result);
+      }
+    } catch (err) {
+      console.error("[Yellow] Failed to parse message:", err);
+    }
+  }
+
+  private async handleAuthChallenge(challenge: string): Promise<void> {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.authParams) return;
+
+    try {
+      const signer = createEIP712AuthMessageSigner(
+        this.walletClient,
+        this.authParams,
+        { name: APP_NAME },
+      );
+
+      console.log("[Yellow] Signing auth challenge");
+
+      const verifyMsg = await createAuthVerifyMessageFromChallenge(
+        signer,
+        challenge,
+      );
+
+      this.ws?.send(verifyMsg);
+      console.log("[Yellow] Sent auth_verify");
+    } catch (err) {
+      console.error("[Yellow] Failed to sign auth challenge:", err);
+      if (this.authTimeout) {
+        clearTimeout(this.authTimeout);
+        this.authTimeout = null;
+      }
+      this.authReject?.(err instanceof Error ? err : new Error(String(err)));
+      this.authReject = null;
+      this.authResolve = null;
+    }
   }
 
   private waitFor(method: string, timeoutMs: number): Promise<any> {

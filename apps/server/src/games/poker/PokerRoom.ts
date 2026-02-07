@@ -110,6 +110,17 @@ export class PokerRoom extends GameRoom {
     }
   }
 
+  getHandNumber(): number {
+    return this.handNumber;
+  }
+
+  getNextAvailableSeat(): number {
+    for (let i = 0; i < this.config.maxPlayers; i++) {
+      if (!this.players.has(i)) return i;
+    }
+    return -1;
+  }
+
   private handleHandComplete(): void {
     const winners = this.table.winners();
     const result: HandResult = {
@@ -119,6 +130,8 @@ export class PokerRoom extends GameRoom {
         hand: w.hand?.name,
       })),
       pots: this.mapPots(),
+      handNumber: this.handNumber,
+      chipUnit: this.config.chipUnit,
     };
 
     const removedSeats = this.finalizePendingLeaves();

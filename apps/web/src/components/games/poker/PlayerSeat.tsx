@@ -81,12 +81,15 @@ export function PlayerSeat({
           {displayName}
         </p>
 
-        {/* Chips */}
+        {/* Chips — dual display */}
         <p className="text-xs font-mono text-neon-green">
-          {formatYusd(seat.chipCount * chipUnit)} ytest.usd
+          {seat.chipCount} chips
           {seat.isAllIn && (
             <span className="ml-1 text-red-400 font-bold">ALL IN</span>
           )}
+        </p>
+        <p className="text-[10px] font-mono text-white/40">
+          {formatYusd(seat.chipCount * chipUnit)} ytest.usd
         </p>
 
         {/* Dealer button */}

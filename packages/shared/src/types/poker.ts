@@ -72,4 +72,6 @@ export interface HandResult {
     hand?: string;
   }>;
   pots: PotInfo[];
+  handNumber?: number;
+  chipUnit?: number;
 }

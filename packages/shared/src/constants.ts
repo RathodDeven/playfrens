@@ -9,7 +9,7 @@ export const CONTRACTS = {
 export const CLEARNODE_WS_URL = "wss://clearnet-sandbox.yellow.com/ws";
 
 export const GAME_DEFAULTS = {
-  MAX_PLAYERS: 6,
+  MAX_PLAYERS: 4,
   DEFAULT_BUY_IN: 1000,
   DEFAULT_SMALL_BLIND: 5,
   DEFAULT_BIG_BLIND: 10,
