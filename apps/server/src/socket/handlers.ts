@@ -1,6 +1,6 @@
 import { EVENTS, type PokerAction } from "@playfrens/shared";
 import type { Server, Socket } from "socket.io";
-import { PokerRoom } from "../games/poker/PokerRoom.js";
+import type { PokerRoom } from "../games/poker/PokerRoom.js";
 import type { RoomManager } from "../rooms/RoomManager.js";
 import type { YellowSessionManager } from "../yellow/sessionManager.js";
 import { registerSocket, unregisterSocket } from "./middleware.js";
@@ -203,12 +203,7 @@ export function setupSocketHandlers(
         }
 
         (room as PokerRoom).startHand();
-        autoFoldPendingLeavers(
-          io,
-          data.roomId,
-          roomManager,
-          yellowSessions,
-        );
+        autoFoldPendingLeavers(io, data.roomId, roomManager, yellowSessions);
         broadcastGameState(io, data.roomId, roomManager);
 
         console.log(`[Game] Hand started in ${data.roomId}`);
@@ -238,12 +233,7 @@ export function setupSocketHandlers(
             betSize: data.betSize,
           });
 
-          autoFoldPendingLeavers(
-            io,
-            data.roomId,
-            roomManager,
-            yellowSessions,
-          );
+          autoFoldPendingLeavers(io, data.roomId, roomManager, yellowSessions);
           broadcastGameState(io, data.roomId, roomManager);
 
           console.log(
