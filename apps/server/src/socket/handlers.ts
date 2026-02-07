@@ -106,7 +106,10 @@ export function setupSocketHandlers(
           }
 
           const requiredDeposit = room.config.buyIn * room.config.chipUnit;
-          const available = await yellowSessions.getBalance(address);
+          const available = await yellowSessions.getLedgerBalance(
+            address,
+            "ytest.usd",
+          );
           if (available < requiredDeposit) {
             socket.emit(EVENTS.ERROR, {
               message: "Insufficient Yellow balance for buy-in",

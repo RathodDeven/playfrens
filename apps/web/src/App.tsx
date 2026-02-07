@@ -7,6 +7,7 @@ import { Header } from "./components/layout/Header";
 import { Lobby } from "./components/lobby/Lobby";
 import { useGameState } from "./hooks/useGameState";
 import { useSocket } from "./hooks/useSocket";
+import { useWalletBalance } from "./hooks/useWalletBalance";
 import { useYellow } from "./hooks/useYellow";
 
 export function App() {
@@ -43,6 +44,7 @@ export function App() {
   } = useGameState(socket);
 
   const { balance, refetchBalance, requestTokens } = useYellow(address);
+  const { balance: walletBalance } = useWalletBalance(address);
 
   // Not connected
   if (!isConnected) {
@@ -110,6 +112,7 @@ export function App() {
             joinRoom(id, seat);
           }}
           balance={balance}
+          walletBalance={walletBalance}
           onDeposit={async () => {
             await requestTokens();
             await refetchBalance();

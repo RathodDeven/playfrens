@@ -9,6 +9,7 @@ export function Lobby({
   onCreateRoom,
   onJoinRoom,
   balance,
+  walletBalance,
   onDeposit,
 }: {
   onCreateRoom: (config: {
@@ -20,6 +21,7 @@ export function Lobby({
   }) => void;
   onJoinRoom: (roomId: string, seatIndex: number) => void;
   balance: string;
+  walletBalance: string;
   onDeposit: () => Promise<void>;
 }) {
   const [joinCode, setJoinCode] = useState("");
@@ -63,12 +65,21 @@ export function Lobby({
           className="glass rounded-2xl p-5 flex items-center justify-between"
           whileHover={{ scale: 1.01 }}
         >
-          <div>
-            <p className="text-sm text-white/50">Yellow Balance</p>
-            <p className="text-2xl font-bold font-mono text-neon-green">
-              {formatYusd(Number(balance))}{" "}
-              <span className="text-sm text-white/40">ytest.usd</span>
-            </p>
+          <div className="space-y-2">
+            <div>
+              <p className="text-sm text-white/50">Yellow Balance</p>
+              <p className="text-2xl font-bold font-mono text-neon-green">
+                {formatYusd(Number(balance))}{" "}
+                <span className="text-sm text-white/40">ytest.usd</span>
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-white/50">Wallet Balance</p>
+              <p className="text-lg font-bold font-mono text-white/80">
+                {formatYusd(Number(walletBalance))}{" "}
+                <span className="text-xs text-white/40">ytest.usd</span>
+              </p>
+            </div>
           </div>
           <motion.button
             whileHover={{ scale: 1.05 }}

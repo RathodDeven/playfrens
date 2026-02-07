@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createServer } from "node:http";
+import os from "node:os";
 import cors from "cors";
 import express from "express";
 import { Server } from "socket.io";
@@ -20,6 +21,22 @@ app.use(express.json());
 // Health check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: Date.now() });
+});
+
+app.get("/yellow/ledger-balance/:address", async (req, res) => {
+  try {
+    const address = req.params.address?.toLowerCase();
+    const asset = String(req.query.asset ?? "ytest.usd");
+    if (!address || !address.startsWith("0x")) {
+      res.status(400).json({ error: "Invalid address" });
+      return;
+    }
+
+    const balance = await yellowSessions.getLedgerBalance(address, asset);
+    res.json({ address, asset, balance: String(balance) });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "Unknown error" });
+  }
 });
 
 const httpServer = createServer(app);
@@ -55,11 +72,23 @@ yellowClient.connect().catch((err) => {
 setupSocketHandlers(io, roomManager, yellowSessions);
 
 httpServer.listen(PORT, () => {
+  const interfaces = os.networkInterfaces();
+  const addresses = Object.values(interfaces)
+    .flat()
+    .filter(
+      (info): info is os.NetworkInterfaceInfo =>
+        Boolean(info) && info.family === "IPv4" && !info.internal,
+    )
+    .map((info) => `http://${info.address}:${PORT}`);
+
+  const networkUrl = addresses[0] || `http://localhost:${PORT}`;
   console.log(`
   ╔═══════════════════════════════════════╗
   ║   🎮 PlayFrens Server Running         ║
   ║   Port: ${PORT}                         ║
   ║   Ready for games!                    ║
   ╚═══════════════════════════════════════╝
+  
+  VITE_SERVER_URL=${networkUrl}
   `);
 });

@@ -45,6 +45,21 @@ export class YellowSessionManager {
     return this.client.getBalance(address);
   }
 
+  async getLedgerBalance(address: string, asset: string): Promise<number> {
+    const balances = await this.client.getLedgerBalances(address);
+    const target = asset.toLowerCase();
+    const match =
+      balances.find((b) => b.asset?.toLowerCase() === target) ??
+      (target === "ytest.usd"
+        ? balances.find((b) => b.asset?.toLowerCase() === "usdc")
+        : undefined);
+    const value = Number(match?.amount ?? 0);
+    if (Number.isNaN(value)) {
+      throw new Error("Invalid ledger balance returned from Clearnode");
+    }
+    return value;
+  }
+
   async ensureSession(room: GameRoom): Promise<RoomSession> {
     const existing = this.sessions.get(room.roomId);
     if (existing) return existing;

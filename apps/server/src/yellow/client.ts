@@ -16,6 +16,8 @@ export class YellowClient {
   > = new Map();
   private authenticated = false;
   private wsUrl: string;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private isConnecting = false;
 
   constructor(wallet: WalletClient, wsUrl?: string) {
     this.wallet = wallet;
@@ -24,6 +26,9 @@ export class YellowClient {
 
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (this.isConnecting) return;
+      this.isConnecting = true;
+
       this.ws = new WebSocket(this.wsUrl);
 
       this.ws.on("open", async () => {
@@ -32,8 +37,10 @@ export class YellowClient {
           await this.authenticate();
           this.authenticated = true;
           console.log("[Yellow] Authenticated");
+          this.isConnecting = false;
           resolve();
         } catch (err) {
+          this.isConnecting = false;
           reject(err);
         }
       });
@@ -47,13 +54,26 @@ export class YellowClient {
         }
       });
 
-      this.ws.on("close", () => {
-        console.log("[Yellow] Disconnected from Clearnode");
+      this.ws.on("close", (code: number, reason: Buffer) => {
+        console.log(
+          `[Yellow] Disconnected from Clearnode (code ${code}) ${reason.toString()}`,
+        );
         this.authenticated = false;
+        this.isConnecting = false;
+
+        if (!this.reconnectTimer) {
+          this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.connect().catch((err) => {
+              console.error("[Yellow] Reconnect failed:", err);
+            });
+          }, 2000);
+        }
       });
 
       this.ws.on("error", (err: Error) => {
         console.error("[Yellow] WebSocket error:", err);
+        this.isConnecting = false;
         reject(err);
       });
     });
@@ -129,12 +149,32 @@ export class YellowClient {
   }
 
   async getBalance(address: string): Promise<number> {
-    const result = await this.sendRequest("get_balance", { address });
-    const value = Number(result?.balance ?? 0);
+    const balances = await this.getLedgerBalances(address);
+    const match = balances.find((b) => b.asset === "ytest.usd")
+      ?? balances.find((b) => b.asset === "usdc");
+    const value = Number(match?.amount ?? 0);
     if (Number.isNaN(value)) {
-      throw new Error("Invalid balance returned from Clearnode");
+      throw new Error("Invalid ledger balance returned from Clearnode");
     }
     return value;
+  }
+
+  async getLedgerBalances(
+    accountId?: string,
+  ): Promise<Array<{ asset: string; amount: string }>> {
+    const params = accountId ? { account_id: accountId } : {};
+    const result = await this.sendRequest("get_ledger_balances", params);
+    const balances =
+      result?.ledger_balances ??
+      result?.balances ??
+      (Array.isArray(result) ? result : []);
+    if (!Array.isArray(balances)) {
+      throw new Error("Invalid ledger balances response");
+    }
+    return balances.map((balance) => ({
+      asset: String(balance.asset ?? ""),
+      amount: String(balance.amount ?? "0"),
+    }));
   }
 
   async submitAppState(

@@ -1,46 +1,18 @@
 import { CLEARNODE_WS_URL } from "@playfrens/shared";
 
 const WS_URL = import.meta.env.VITE_CLEARNODE_WS_URL || CLEARNODE_WS_URL;
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
 export async function getYellowBalance(address: string): Promise<string> {
-  // Query balance via Clearnode WebSocket
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(WS_URL);
-    const requestId = 1;
-
-    ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id: requestId,
-          method: "get_balance",
-          params: { address },
-        }),
-      );
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.id === requestId) {
-          ws.close();
-          resolve(msg.result?.balance ?? "0");
-        }
-      } catch {
-        ws.close();
-        reject(new Error("Failed to parse response"));
-      }
-    };
-
-    ws.onerror = () => {
-      reject(new Error("WebSocket connection failed"));
-    };
-
-    setTimeout(() => {
-      ws.close();
-      resolve("0");
-    }, 5000);
-  });
+  const response = await fetch(
+    `${SERVER_URL}/yellow/ledger-balance/${address}?asset=ytest.usd`,
+  );
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Failed to fetch Yellow balance");
+  }
+  const data = (await response.json()) as { balance?: string };
+  return data.balance ?? "0";
 }
 
 export async function requestFaucetTokens(address: string): Promise<void> {
