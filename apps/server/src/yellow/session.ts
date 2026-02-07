@@ -23,8 +23,8 @@ export function createSessionDefinition(
 ): AppSessionDefinition {
   // Normalize all addresses to EIP-55 checksum format — Clearnode
   // stores wallet addresses in checksum and does case-sensitive comparison.
-  const allParticipants = [...participants, serverAddress].map(
-    (a) => getAddress(a as `0x${string}`),
+  const allParticipants = [...participants, serverAddress].map((a) =>
+    getAddress(a as `0x${string}`),
   ) as Address[];
   const weights = participants.map(() => 0);
   weights.push(100); // Server (trusted judge) has full weight

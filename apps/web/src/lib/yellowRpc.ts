@@ -124,8 +124,14 @@ export class YellowRpcClient {
     } catch (err: any) {
       // If auth-related error, re-authorize and retry once
       const msg = err?.message?.toLowerCase() ?? "";
-      if (msg.includes("auth") || msg.includes("expired") || msg.includes("unauthorized")) {
-        console.log("[Yellow] Auth error in getLedgerBalances, re-authorizing...");
+      if (
+        msg.includes("auth") ||
+        msg.includes("expired") ||
+        msg.includes("unauthorized")
+      ) {
+        console.log(
+          "[Yellow] Auth error in getLedgerBalances, re-authorizing...",
+        );
         this.authenticated = false;
         this.rotateSessionKey();
         this.disconnect();
@@ -136,7 +142,9 @@ export class YellowRpcClient {
     }
   }
 
-  private async _fetchLedgerBalances(): Promise<Array<{ asset: string; amount: string }>> {
+  private async _fetchLedgerBalances(): Promise<
+    Array<{ asset: string; amount: string }>
+  > {
     const message = await createGetLedgerBalancesMessage(
       this.sessionSigner,
       this.address,
@@ -219,7 +227,9 @@ export class YellowRpcClient {
 
   private handleMessage(data: any): void {
     try {
-      const message = JSON.parse(typeof data === "string" ? data : data.toString());
+      const message = JSON.parse(
+        typeof data === "string" ? data : data.toString(),
+      );
       const method = message?.res?.[1];
       const result = message?.res?.[2];
 

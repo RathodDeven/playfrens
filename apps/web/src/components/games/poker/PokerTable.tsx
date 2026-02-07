@@ -75,7 +75,13 @@ export function PokerTable({
         clearTimeout(autoStartTimerRef.current);
       }
     };
-  }, [lastHandResult, gameState.isHandInProgress, heroSeatIndex, gameState.seats.length, onStartHand]);
+  }, [
+    lastHandResult,
+    gameState.isHandInProgress,
+    heroSeatIndex,
+    gameState.seats.length,
+    onStartHand,
+  ]);
 
   // Show confetti when hero wins
   useEffect(() => {

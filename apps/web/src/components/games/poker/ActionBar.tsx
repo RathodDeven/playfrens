@@ -77,9 +77,7 @@ export function ActionBar({
               className={`px-5 py-2.5 rounded-xl font-bold text-sm ${style.bg} ${style.text} transition-colors`}
             >
               {style.label}
-              {la.action === "call" && la.minBet
-                ? ` ${la.minBet}`
-                : ""}
+              {la.action === "call" && la.minBet ? ` ${la.minBet}` : ""}
             </motion.button>
           );
         })}

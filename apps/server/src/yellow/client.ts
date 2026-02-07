@@ -1,6 +1,6 @@
 import {
   RPCMethod,
-  RPCProtocolVersion,
+  type RPCProtocolVersion,
   createAppSessionMessage,
   createAuthRequestMessage,
   createAuthVerifyMessageFromChallenge,
@@ -241,7 +241,9 @@ export class YellowClient {
     if (msg.res && Array.isArray(msg.res)) {
       const method = msg.res[1];
       if (method !== RPCMethod.Ping && method !== RPCMethod.Pong) {
-        console.log(`[Yellow] WS received: method=${method}, data=${JSON.stringify(msg.res[2]).slice(0, 200)}`);
+        console.log(
+          `[Yellow] WS received: method=${method}, data=${JSON.stringify(msg.res[2]).slice(0, 200)}`,
+        );
       }
     }
 
@@ -418,10 +420,19 @@ export class YellowClient {
     }
 
     const assembled = JSON.stringify({ req, sig: signatures });
-    console.log(`[Yellow] Submitting multi-sig app session with ${signatures.length} signatures`);
+    console.log(
+      `[Yellow] Submitting multi-sig app session with ${signatures.length} signatures`,
+    );
 
-    const result = await this.sendAndWait(assembled, "create_app_session", 15000);
-    console.log("[Yellow] create_app_session multi-sig response:", JSON.stringify(result));
+    const result = await this.sendAndWait(
+      assembled,
+      "create_app_session",
+      15000,
+    );
+    console.log(
+      "[Yellow] create_app_session multi-sig response:",
+      JSON.stringify(result),
+    );
     const sessionData = Array.isArray(result) ? result[0] : result;
     const sessionId = sessionData?.app_session_id;
     if (!sessionId) {
@@ -461,11 +472,22 @@ export class YellowClient {
       })),
     });
 
-    console.log("[Yellow] Creating app session with definition:", JSON.stringify(definition));
-    console.log("[Yellow] Initial allocations:", allocations.map(a => `${a.participant.slice(0,10)}: ${a.amount} ${a.asset}`).join(", "));
+    console.log(
+      "[Yellow] Creating app session with definition:",
+      JSON.stringify(definition),
+    );
+    console.log(
+      "[Yellow] Initial allocations:",
+      allocations
+        .map((a) => `${a.participant.slice(0, 10)}: ${a.amount} ${a.asset}`)
+        .join(", "),
+    );
 
     const result = await this.sendAndWait(signedMessage, "create_app_session");
-    console.log("[Yellow] create_app_session response:", JSON.stringify(result));
+    console.log(
+      "[Yellow] create_app_session response:",
+      JSON.stringify(result),
+    );
     const sessionData = Array.isArray(result) ? result[0] : result;
     const sessionId = sessionData?.app_session_id;
     if (!sessionId) {
@@ -488,19 +510,25 @@ export class YellowClient {
       throw new Error("Not authenticated with Clearnode");
     }
 
-    const signedMessage = await createSubmitAppStateMessage<typeof RPCProtocolVersion.NitroRPC_0_2>(
-      this.sessionSigner,
-      {
-        app_session_id: sessionId as `0x${string}`,
-        allocations: allocations.map((a) => ({
-          participant: a.participant as Address,
-          asset: a.asset,
-          amount: a.amount,
-        })),
-      },
-    );
+    const signedMessage = await createSubmitAppStateMessage<
+      typeof RPCProtocolVersion.NitroRPC_0_2
+    >(this.sessionSigner, {
+      app_session_id: sessionId as `0x${string}`,
+      allocations: allocations.map((a) => ({
+        participant: a.participant as Address,
+        asset: a.asset,
+        amount: a.amount,
+      })),
+    });
 
-    console.log("[Yellow] Submitting app state for session:", sessionId, "allocations:", allocations.map(a => `${a.participant.slice(0,10)}: ${a.amount}`).join(", "));
+    console.log(
+      "[Yellow] Submitting app state for session:",
+      sessionId,
+      "allocations:",
+      allocations
+        .map((a) => `${a.participant.slice(0, 10)}: ${a.amount}`)
+        .join(", "),
+    );
     const result = await this.sendAndWait(signedMessage, "submit_app_state");
     console.log("[Yellow] submit_app_state response:", JSON.stringify(result));
   }
@@ -529,7 +557,14 @@ export class YellowClient {
       },
     );
 
-    console.log("[Yellow] Closing app session:", sessionId, "allocations:", allocations.map(a => `${a.participant.slice(0,10)}: ${a.amount}`).join(", "));
+    console.log(
+      "[Yellow] Closing app session:",
+      sessionId,
+      "allocations:",
+      allocations
+        .map((a) => `${a.participant.slice(0, 10)}: ${a.amount}`)
+        .join(", "),
+    );
     const result = await this.sendAndWait(signedMessage, "close_app_session");
     console.log("[Yellow] close_app_session response:", JSON.stringify(result));
   }

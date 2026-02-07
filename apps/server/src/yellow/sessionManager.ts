@@ -1,6 +1,10 @@
 import type { GameRoom } from "../games/GameRoom.js";
 import type { PokerRoom } from "../games/poker/PokerRoom.js";
-import type { AppSessionAllocation, AppSessionDefinition, YellowClient } from "./client.js";
+import type {
+  AppSessionAllocation,
+  AppSessionDefinition,
+  YellowClient,
+} from "./client.js";
 import {
   computeAllocations,
   createInitialAllocations,
@@ -136,8 +140,12 @@ export class YellowSessionManager {
     const allParticipants = [...participants, this.serverAddress];
 
     console.log(`[Yellow] Starting signing for room ${roomId}`);
-    console.log(`[Yellow] Participants: ${allParticipants.map(p => p.slice(0,10)).join(", ")}`);
-    console.log(`[Yellow] Allocations: ${allocations.map(a => `${a.participant.slice(0,10)}: ${a.amount} ${a.asset}`).join(", ")}`);
+    console.log(
+      `[Yellow] Participants: ${allParticipants.map((p) => p.slice(0, 10)).join(", ")}`,
+    );
+    console.log(
+      `[Yellow] Allocations: ${allocations.map((a) => `${a.participant.slice(0, 10)}: ${a.amount} ${a.asset}`).join(", ")}`,
+    );
 
     // Server creates and signs the request locally (no WS send yet)
     const { req, serverSig } = await this.client.prepareAppSessionRequest(
@@ -153,10 +161,14 @@ export class YellowSessionManager {
           (addr) => !p.playerSigs.has(addr.toLowerCase()),
         );
         console.error(
-          `[Yellow] Signing timed out for room ${roomId}. Missing: ${missing.map(m => m.slice(0,10)).join(", ")}`,
+          `[Yellow] Signing timed out for room ${roomId}. Missing: ${missing.map((m) => m.slice(0, 10)).join(", ")}`,
         );
         this.pendingSessions.delete(roomId);
-        onError(new Error(`Signing timed out. ${missing.length} player(s) didn't sign.`));
+        onError(
+          new Error(
+            `Signing timed out. ${missing.length} player(s) didn't sign.`,
+          ),
+        );
       }
     }, 30000);
 
@@ -187,22 +199,26 @@ export class YellowSessionManager {
   markSigned(roomId: string, address: string, signature: string): void {
     const pending = this.pendingSessions.get(roomId);
     if (!pending) {
-      console.warn(`[Yellow] markSigned: no pending session for room ${roomId}`);
+      console.warn(
+        `[Yellow] markSigned: no pending session for room ${roomId}`,
+      );
       return;
     }
 
     pending.playerSigs.set(address.toLowerCase(), signature);
     console.log(
-      `[Yellow] ${address.slice(0,10)} signed for room ${roomId} (${pending.playerSigs.size}/${pending.playerParticipants.length} players)`,
+      `[Yellow] ${address.slice(0, 10)} signed for room ${roomId} (${pending.playerSigs.size}/${pending.playerParticipants.length} players)`,
     );
 
     // Check if all PLAYER participants have signed
-    const allPlayersSigned = pending.playerParticipants.every(
-      (p) => pending.playerSigs.has(p.toLowerCase()),
+    const allPlayersSigned = pending.playerParticipants.every((p) =>
+      pending.playerSigs.has(p.toLowerCase()),
     );
 
     if (allPlayersSigned) {
-      console.log(`[Yellow] All ${pending.playerParticipants.length} players signed for room ${roomId} — assembling multi-sig message`);
+      console.log(
+        `[Yellow] All ${pending.playerParticipants.length} players signed for room ${roomId} — assembling multi-sig message`,
+      );
       clearTimeout(pending.timeout);
       void this.assembleAndSubmit(roomId, pending);
     }
@@ -211,21 +227,35 @@ export class YellowSessionManager {
   /**
    * Assemble all signatures into one message and submit to Clearnode.
    */
-  private async assembleAndSubmit(roomId: string, pending: PendingSession): Promise<void> {
+  private async assembleAndSubmit(
+    roomId: string,
+    pending: PendingSession,
+  ): Promise<void> {
     const allSigs = [pending.serverSig, ...pending.playerSigs.values()];
-    console.log(`[Yellow] Sending multi-sig message with ${allSigs.length} signatures for room ${roomId}`);
+    console.log(
+      `[Yellow] Sending multi-sig message with ${allSigs.length} signatures for room ${roomId}`,
+    );
 
     try {
-      const sessionId = await this.client.submitMultiSigSession(pending.req, allSigs);
+      const sessionId = await this.client.submitMultiSigSession(
+        pending.req,
+        allSigs,
+      );
       this.finalizeSession(roomId, pending, sessionId);
     } catch (err: any) {
-      console.error(`[Yellow] Multi-sig session creation failed: ${err.message}`);
+      console.error(
+        `[Yellow] Multi-sig session creation failed: ${err.message}`,
+      );
       this.pendingSessions.delete(roomId);
       pending.onError(err);
     }
   }
 
-  private finalizeSession(roomId: string, pending: PendingSession, sessionId: string): void {
+  private finalizeSession(
+    roomId: string,
+    pending: PendingSession,
+    sessionId: string,
+  ): void {
     const playerParticipants = pending.participants.filter(
       (p) => p.toLowerCase() !== this.serverAddress.toLowerCase(),
     );
@@ -261,7 +291,9 @@ export class YellowSessionManager {
   async submitHandAllocations(room: PokerRoom): Promise<void> {
     const session = this.sessions.get(room.roomId);
     if (!session) {
-      console.warn(`[Yellow] submitHandAllocations: no session for room ${room.roomId} — skipping`);
+      console.warn(
+        `[Yellow] submitHandAllocations: no session for room ${room.roomId} — skipping`,
+      );
       return;
     }
 
@@ -277,15 +309,21 @@ export class YellowSessionManager {
     session.lastAllocations = allocations;
 
     const chipCounts = room.getChipCounts();
-    console.log(`[Yellow] submitHandAllocations — chipCounts: ${[...chipCounts.entries()].map(([s, c]) => `seat${s}=${c}`).join(", ")}`);
+    console.log(
+      `[Yellow] submitHandAllocations — chipCounts: ${[...chipCounts.entries()].map(([s, c]) => `seat${s}=${c}`).join(", ")}`,
+    );
     console.log(
       `[Yellow] Submitting state for session ${session.sessionId}:`,
-      allocations.map(a => `${a.participant.slice(0,10)}: ${a.amount}`).join(", "),
+      allocations
+        .map((a) => `${a.participant.slice(0, 10)}: ${a.amount}`)
+        .join(", "),
     );
 
     try {
       await this.client.submitAppState(session.sessionId, allocations);
-      console.log(`[Yellow] State submitted successfully for session ${session.sessionId}`);
+      console.log(
+        `[Yellow] State submitted successfully for session ${session.sessionId}`,
+      );
     } catch (err: any) {
       console.error(`[Yellow] Submit app state failed: ${err.message}`);
       console.error(`[Yellow] Full error:`, err);
@@ -313,12 +351,19 @@ export class YellowSessionManager {
 
     console.log(
       `[Yellow] Closing session ${session.sessionId} with allocations:`,
-      session.lastAllocations.map(a => `${a.participant.slice(0,10)}: ${a.amount}`).join(", "),
+      session.lastAllocations
+        .map((a) => `${a.participant.slice(0, 10)}: ${a.amount}`)
+        .join(", "),
     );
 
     try {
-      await this.client.closeAppSession(session.sessionId, session.lastAllocations);
-      console.log(`[Yellow] Session ${session.sessionId} closed — funds distributed`);
+      await this.client.closeAppSession(
+        session.sessionId,
+        session.lastAllocations,
+      );
+      console.log(
+        `[Yellow] Session ${session.sessionId} closed — funds distributed`,
+      );
     } catch (err: any) {
       console.error(`[Yellow] Close session failed: ${err.message}`);
     }

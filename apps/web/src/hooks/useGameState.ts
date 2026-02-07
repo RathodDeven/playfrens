@@ -143,9 +143,13 @@ export function useGameState(
       allocations: any;
       req: any[];
     }) {
-      console.log("[Game] Received SIGN_SESSION_REQUEST", { hasReq: !!data.req });
+      console.log("[Game] Received SIGN_SESSION_REQUEST", {
+        hasReq: !!data.req,
+      });
       if (!yellowClient || !address) {
-        console.error("[Game] Cannot sign session — no Yellow client or address");
+        console.error(
+          "[Game] Cannot sign session — no Yellow client or address",
+        );
         return;
       }
 
@@ -153,7 +157,9 @@ export function useGameState(
       yellowClient
         .signPayload(data.req)
         .then((signature: string) => {
-          console.log("[Game] Payload signed locally, sending signature to server");
+          console.log(
+            "[Game] Payload signed locally, sending signature to server",
+          );
           socket.emit(EVENTS.SESSION_SIGNED, {
             roomId,
             address,
