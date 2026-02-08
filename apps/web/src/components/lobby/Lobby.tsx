@@ -1,9 +1,17 @@
 import { CHIP_UNITS, GAME_DEFAULTS } from "@playfrens/shared";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { normalize } from "viem/ens";
 import { useEnsAddress, useEnsAvatar, useEnsName } from "wagmi";
 import { sepolia } from "wagmi/chains";
+
+function tryNormalize(name: string): string | undefined {
+  try {
+    return normalize(name);
+  } catch {
+    return undefined;
+  }
+}
 import { formatYusd } from "../../lib/format";
 import type { TransactionEntry } from "../../lib/transactions";
 import { DepositModal } from "./DepositModal";
@@ -27,9 +35,15 @@ function InviteInput({
   const isEnsName = query.includes(".");
   const isRawAddress = /^0x[a-fA-F0-9]{40}$/i.test(query);
 
+  // Safely normalize ENS name (returns undefined for partial/invalid input)
+  const normalizedQuery = useMemo(
+    () => (isEnsName ? tryNormalize(query) : undefined),
+    [isEnsName, query],
+  );
+
   // Forward resolution: ENS name → address
   const { data: resolvedAddress, isLoading: isLoadingAddress } = useEnsAddress({
-    name: isEnsName ? normalize(query) : undefined,
+    name: normalizedQuery,
     chainId: sepolia.id,
   });
 
@@ -41,8 +55,12 @@ function InviteInput({
 
   // Avatar from ENS name (either typed or reverse-resolved)
   const ensNameForAvatar = isEnsName ? query : reverseName;
+  const normalizedAvatar = useMemo(
+    () => (ensNameForAvatar ? tryNormalize(ensNameForAvatar) : undefined),
+    [ensNameForAvatar],
+  );
   const { data: avatar } = useEnsAvatar({
-    name: ensNameForAvatar ? normalize(ensNameForAvatar) : undefined,
+    name: normalizedAvatar,
     chainId: sepolia.id,
   });
 
