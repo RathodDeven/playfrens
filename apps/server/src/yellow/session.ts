@@ -93,6 +93,8 @@ export function createInitialAllocations(
 
 /**
  * Compute final allocations from chip counts for close/state updates.
+ * All arithmetic done in on-chain integer units to avoid floating-point issues.
+ * Server (last participant) always gets exactly "0".
  */
 export function computeAllocations(
   participants: string[],
@@ -101,42 +103,53 @@ export function computeAllocations(
   totalDeposit: number,
   chipUnit: number,
 ): AppSessionAllocation[] {
-  const addressToAmount = new Map<string, number>();
+  // Work in on-chain integer units (6 decimals) to avoid floating point
+  const DECIMALS = 10 ** 6;
+  const expectedTotal = Math.round(totalDeposit * DECIMALS);
 
   // Normalize participant addresses to EIP-55 checksum
   const checksumParticipants = participants.map((p) =>
     getAddress(p as `0x${string}`),
   );
 
-  // Initialize all participants with 0
+  // Map address → on-chain integer amount
+  const addressToRaw = new Map<string, number>();
   for (const p of checksumParticipants) {
-    addressToAmount.set(p, 0);
+    addressToRaw.set(p, 0);
   }
 
   const totalChips = Array.from(chipCounts.values()).reduce(
     (sum, c) => sum + c,
     0,
   );
+
   if (totalChips === 0) {
-    // Safety net: distribute totalDeposit equally among non-server participants
-    // rather than returning all zeros (which Clearnode rejects as "not fully redistributed")
-    const playerParticipants = checksumParticipants.filter(
-      (_, i) => i < checksumParticipants.length - 1,
-    );
-    const equalShare =
-      playerParticipants.length > 0
-        ? roundAmount(totalDeposit / playerParticipants.length)
-        : 0;
-    return checksumParticipants.map((p, i) => ({
+    // Safety net: distribute equally among players (not server)
+    const playerCount = checksumParticipants.length - 1;
+    if (playerCount > 0) {
+      const share = Math.floor(expectedTotal / playerCount);
+      let remainder = expectedTotal - share * playerCount;
+      return checksumParticipants.map((p, i) => {
+        if (i >= playerCount)
+          return { participant: p as Address, asset: ASSET, amount: "0" };
+        const extra = remainder > 0 ? 1 : 0;
+        remainder -= extra;
+        return {
+          participant: p as Address,
+          asset: ASSET,
+          amount: String(share + extra),
+        };
+      });
+    }
+    return checksumParticipants.map((p) => ({
       participant: p as Address,
       asset: ASSET,
-      amount:
-        i < checksumParticipants.length - 1 ? toOnChainAmount(equalShare) : "0",
+      amount: "0",
     }));
   }
 
-  // Allocate based on chips -> ytest.usd
-  let allocatedTotal = 0;
+  // Convert chips to on-chain amounts (integer math)
+  let allocatedSum = 0;
   let topAddress: string | null = null;
   let topChips = -1;
 
@@ -145,9 +158,10 @@ export function computeAllocations(
     if (!rawAddress) continue;
     const address = getAddress(rawAddress as `0x${string}`);
 
-    const amount = roundAmount(chips * chipUnit);
-    addressToAmount.set(address, amount);
-    allocatedTotal = roundAmount(allocatedTotal + amount);
+    // chips * chipUnit * 10^6 — round once to integer
+    const rawAmount = Math.round(chips * chipUnit * DECIMALS);
+    addressToRaw.set(address, rawAmount);
+    allocatedSum += rawAmount;
 
     if (chips > topChips) {
       topChips = chips;
@@ -155,20 +169,17 @@ export function computeAllocations(
     }
   }
 
-  // Ensure total allocations sum to totalDeposit (fix rounding)
-  const diff = roundAmount(totalDeposit - allocatedTotal);
+  // Fix rounding: ensure player allocations sum exactly to expectedTotal
+  // Server stays at 0 — only adjust player with most chips
+  const diff = expectedTotal - allocatedSum;
   if (diff !== 0 && topAddress) {
-    const current = addressToAmount.get(topAddress) ?? 0;
-    addressToAmount.set(topAddress, roundAmount(current + diff));
+    const current = addressToRaw.get(topAddress) ?? 0;
+    addressToRaw.set(topAddress, current + diff);
   }
 
   return checksumParticipants.map((p) => ({
     participant: p as Address,
     asset: ASSET,
-    amount: toOnChainAmount(addressToAmount.get(p) ?? 0),
+    amount: String(addressToRaw.get(p) ?? 0),
   }));
-}
-
-function roundAmount(value: number): number {
-  return Math.round(value * 1_000_000) / 1_000_000;
 }

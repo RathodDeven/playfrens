@@ -297,6 +297,20 @@ export class YellowSessionManager {
     const seatToAddress = room.getPlayerSnapshot() ?? room.getPlayerAddresses();
     room.clearSnapshots();
 
+    // Guard: don't overwrite correct allocations if some participants already left
+    const addressesInRoom = new Set(
+      [...seatToAddress.values()].map((a) => a.toLowerCase()),
+    );
+    const allPresent = session.participants.every((p) =>
+      addressesInRoom.has(p.toLowerCase()),
+    );
+    if (!allPresent) {
+      console.log(
+        `[Yellow] snapshotAllocations: not all session participants present in room ${room.roomId} — keeping existing lastAllocations`,
+      );
+      return;
+    }
+
     const allParticipants = [...session.participants, this.serverAddress];
     const allocations = computeAllocations(
       allParticipants,
@@ -332,6 +346,32 @@ export class YellowSessionManager {
     const chipCounts = room.getChipSnapshot() ?? room.getChipCounts();
     const seatToAddress = room.getPlayerSnapshot() ?? room.getPlayerAddresses();
     room.clearSnapshots();
+
+    // Guard: don't overwrite correct allocations if some participants already left
+    const addressesInRoom = new Set(
+      [...seatToAddress.values()].map((a) => a.toLowerCase()),
+    );
+    const allPresent = session.participants.every((p) =>
+      addressesInRoom.has(p.toLowerCase()),
+    );
+    if (!allPresent) {
+      console.log(
+        `[Yellow] submitHandAllocations: not all session participants present in room ${room.roomId} — using existing lastAllocations`,
+      );
+      // Still submit existing allocations to Clearnode
+      try {
+        await this.client.submitAppState(
+          session.sessionId,
+          session.lastAllocations,
+        );
+        console.log(
+          `[Yellow] State submitted (existing allocations) for session ${session.sessionId}`,
+        );
+      } catch (err: any) {
+        console.error(`[Yellow] Submit app state failed: ${err.message}`);
+      }
+      return;
+    }
 
     const allParticipants = [...session.participants, this.serverAddress];
     const allocations = computeAllocations(

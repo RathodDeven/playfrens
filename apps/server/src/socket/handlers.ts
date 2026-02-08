@@ -330,6 +330,18 @@ export function setupSocketHandlers(
             console.log(
               `[Game] Not enough players after leave-next-hand in ${data.roomId}`,
             );
+            // Close session using already-correct lastAllocations
+            if (yellowSessions.hasSession(data.roomId)) {
+              console.log(
+                `[Yellow] Closing session after leave-next-hand for room ${data.roomId}`,
+              );
+              yellowSessions
+                .closeSession(data.roomId)
+                .catch((err) => console.error("[Yellow] Close failed:", err));
+            }
+            if (pokerRoom.getPlayerCount() === 0) {
+              roomManager.deleteRoom(data.roomId);
+            }
             return;
           }
 
@@ -381,6 +393,20 @@ export function setupSocketHandlers(
 
                   if (pr.getPlayerCount() < 2) {
                     broadcastGameState(io, data.roomId, roomManager);
+                    // Close session using already-correct lastAllocations
+                    if (yellowSessions.hasSession(data.roomId)) {
+                      console.log(
+                        `[Yellow] Closing session after leave-next-hand (onReady) for room ${data.roomId}`,
+                      );
+                      yellowSessions
+                        .closeSession(data.roomId)
+                        .catch((err) =>
+                          console.error("[Yellow] Close failed:", err),
+                        );
+                    }
+                    if (pr.getPlayerCount() === 0) {
+                      roomManager.deleteRoom(data.roomId);
+                    }
                     return;
                   }
 

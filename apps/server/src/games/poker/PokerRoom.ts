@@ -13,6 +13,24 @@ import type {
 import * as Poker from "poker-ts";
 import { GameRoom } from "../GameRoom.js";
 
+/** Map poker-ts HandRanking enum to human-readable name */
+function rankingToName(ranking: number | undefined): string | undefined {
+  if (ranking == null) return undefined;
+  const names: Record<number, string> = {
+    0: "High Card",
+    1: "Pair",
+    2: "Two Pair",
+    3: "Three of a Kind",
+    4: "Straight",
+    5: "Flush",
+    6: "Full House",
+    7: "Four of a Kind",
+    8: "Straight Flush",
+    9: "Royal Flush",
+  };
+  return names[ranking];
+}
+
 interface SeatedPlayer {
   address: string;
   ensName?: string;
@@ -189,11 +207,15 @@ export class PokerRoom extends GameRoom {
    * Capture the sole eligible player from pots before showdown.
    */
   private foldWinnerCache: { seatIndex: number; amount: number } | null = null;
+  private potSizesCache: number[] | null = null;
 
   private captureWinnerBeforeShowdown(): void {
     this.foldWinnerCache = null;
+    this.potSizesCache = null;
     try {
       const pots = this.table.pots();
+      // Cache pot sizes before showdown (pots may change after showdown)
+      this.potSizesCache = pots.map((p: any) => p.size || 0);
       const potTotal = pots.reduce(
         (sum: number, p: any) => sum + (p.size || 0),
         0,
@@ -269,29 +291,78 @@ export class PokerRoom extends GameRoom {
   }
 
   private handleHandComplete(): void {
-    let winnerData: any[] = [];
+    // poker-ts winners() returns [SeatIndex, Hand, HoleCards][][]
+    // Outer array = per-pot, inner array = winners for that pot (may be split)
+    // Each winner is a tuple: [seatIndex, {ranking, strength, cards}, holeCards[]]
+    let parsedWinners: Array<{
+      seatIndex: number;
+      amount: number;
+      handName?: string;
+      holeCards?: PokerCard[];
+    }> = [];
+
     try {
-      winnerData = this.table.winners();
-      console.log(`[Poker] winners() returned: ${JSON.stringify(winnerData)}`);
+      const rawWinners = this.table.winners();
+      console.log(`[Poker] winners() raw: ${JSON.stringify(rawWinners)}`);
+
+      if (rawWinners && rawWinners.length > 0) {
+        const potSizes = this.potSizesCache ?? [];
+
+        for (let potIdx = 0; potIdx < rawWinners.length; potIdx++) {
+          const potWinners = rawWinners[potIdx];
+          if (!potWinners || potWinners.length === 0) continue;
+
+          const potSize = potSizes[potIdx] ?? 0;
+          const share =
+            potWinners.length > 0 ? Math.floor(potSize / potWinners.length) : 0;
+
+          for (const tuple of potWinners) {
+            const seatIndex = tuple[0] as number;
+            const hand = tuple[1] as any;
+            const holeCards = tuple[2] as any[];
+
+            const existing = parsedWinners.find(
+              (w) => w.seatIndex === seatIndex,
+            );
+            if (existing) {
+              existing.amount += share;
+            } else {
+              parsedWinners.push({
+                seatIndex,
+                amount: share,
+                handName: rankingToName(hand?.ranking),
+                holeCards: holeCards?.map((c: any) => this.mapCard(c)),
+              });
+            }
+          }
+        }
+      }
     } catch (err) {
       console.log(`[Poker] winners() threw: ${err}`);
     }
 
+    this.potSizesCache = null;
+
     // For fold-wins, winners() returns empty — use cached info
-    if ((!winnerData || winnerData.length === 0) && this.foldWinnerCache) {
-      winnerData = [this.foldWinnerCache];
+    if (parsedWinners.length === 0 && this.foldWinnerCache) {
+      parsedWinners = [
+        {
+          seatIndex: this.foldWinnerCache.seatIndex,
+          amount: this.foldWinnerCache.amount,
+        },
+      ];
       this.foldWinnerCache = null;
       console.log(
-        `[Poker] Using foldWinnerCache: ${JSON.stringify(winnerData)}`,
+        `[Poker] Using foldWinnerCache: ${JSON.stringify(parsedWinners)}`,
       );
     }
 
     // Fallback: find winner using our foldedSeats tracking
-    if (!winnerData || winnerData.length === 0) {
+    if (parsedWinners.length === 0) {
       const totalPot = this.calculateTotalPot();
       for (const [seatIndex] of this.players) {
         if (!this.foldedSeats.has(seatIndex)) {
-          winnerData = [{ seatIndex, amount: totalPot }];
+          parsedWinners = [{ seatIndex, amount: totalPot }];
           console.log(
             `[Poker] Fold-win fallback: seat ${seatIndex} wins ${totalPot}`,
           );
@@ -305,16 +376,16 @@ export class PokerRoom extends GameRoom {
       `[Poker] Hand #${this.handNumber} complete — stacks: ${[...this.getChipCounts().entries()].map(([s, c]) => `seat${s}=${c}`).join(", ")}`,
     );
     console.log(
-      `[Poker] Winners: ${JSON.stringify(winnerData.map((w: any) => ({ seat: w.seatIndex, amount: w.amount, hand: w.hand?.name })))}`,
+      `[Poker] Winners: ${JSON.stringify(parsedWinners.map((w) => ({ seat: w.seatIndex, amount: w.amount, hand: w.handName })))}`,
     );
 
     const result: HandResult = {
-      winners: winnerData.map((w: any) => {
+      winners: parsedWinners.map((w) => {
         const player = this.players.get(w.seatIndex);
         return {
           seatIndex: w.seatIndex,
           amount: w.amount,
-          hand: w.hand?.name,
+          hand: w.handName,
           address: player?.address,
           ensName: player?.ensName,
         };
