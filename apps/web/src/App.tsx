@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useAccount, useEnsAvatar, useEnsName } from "wagmi";
-import { mainnet } from "wagmi/chains";
+import { sepolia } from "wagmi/chains";
 import { PokerTable } from "./components/games/poker/PokerTable";
 import { Header } from "./components/layout/Header";
 import { Lobby } from "./components/lobby/Lobby";
@@ -18,11 +18,11 @@ export function App() {
   const { address, isConnected } = useAccount();
   const { data: ensName } = useEnsName({
     address,
-    chainId: mainnet.id,
+    chainId: sepolia.id,
   });
   const { data: ensAvatar } = useEnsAvatar({
     name: ensName ?? undefined,
-    chainId: mainnet.id,
+    chainId: sepolia.id,
   });
 
   const { socket } = useSocket(
@@ -227,6 +227,8 @@ export function App() {
         onLeaveNextHand={leaveNextHand}
         isLeaveNextHand={isLeaveNextHand}
         balance={balance}
+        ensName={ensName ?? undefined}
+        ensAvatar={ensAvatar ?? undefined}
       />
 
       {/* Main content */}

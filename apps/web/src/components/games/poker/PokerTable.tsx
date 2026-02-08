@@ -2,6 +2,7 @@ import type {
   HandResult,
   PokerAction,
   PokerPlayerState,
+  SeatState,
 } from "@playfrens/shared";
 
 import { AnimatePresence, motion } from "motion/react";
@@ -11,6 +12,7 @@ import { formatYusd } from "../../../lib/format";
 import { ActionBar } from "./ActionBar";
 import { CommunityCards } from "./CommunityCards";
 import { HandHistory } from "./HandHistory";
+import { PlayerModal } from "./PlayerModal";
 import { PlayerSeat } from "./PlayerSeat";
 import { PotDisplay } from "./PotDisplay";
 
@@ -41,6 +43,7 @@ export function PokerTable({
 }) {
   const [showConfetti, setShowConfetti] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [selectedSeat, setSelectedSeat] = useState<SeatState | null>(null);
 
   const autoStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -157,6 +160,7 @@ export function PokerTable({
                     showdownCards={showdownEntry?.cards}
                     chipUnit={chipUnit}
                     isHandInProgress={gameState.isHandInProgress}
+                    onClick={() => setSelectedSeat(seat)}
                   />
                 </div>
               );
@@ -369,6 +373,14 @@ export function PokerTable({
           <p className="text-white/40 text-sm">Waiting for players...</p>
         ) : null}
       </div>
+
+      {/* Player detail modal */}
+      <PlayerModal
+        seat={selectedSeat}
+        chipUnit={chipUnit}
+        isOpen={!!selectedSeat}
+        onClose={() => setSelectedSeat(null)}
+      />
     </div>
   );
 }

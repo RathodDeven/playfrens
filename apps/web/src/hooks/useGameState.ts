@@ -40,6 +40,7 @@ interface UseGameStateReturn {
     bigBlind: number;
     maxPlayers: number;
     chipUnit: number;
+    allowedPlayers?: string[];
   }) => void;
   joinRoom: (roomId: string, seatIndex: number) => void;
   leaveRoom: () => void;
@@ -358,6 +359,7 @@ export function useGameState(
       bigBlind: number;
       maxPlayers: number;
       chipUnit: number;
+      allowedPlayers?: string[];
     }) => {
       socket.emit(EVENTS.CREATE_ROOM, { gameType: "poker", ...config });
     },

@@ -11,6 +11,8 @@ export interface RoomConfig {
   smallBlind: number;
   bigBlind: number;
   chipUnit: number;
+  /** Lowercase wallet addresses. If set, only these players can join (invite-only). */
+  allowedPlayers?: string[];
 }
 
 export interface RoomInfo {

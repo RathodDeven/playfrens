@@ -27,6 +27,8 @@ export function Header({
   onLeaveNextHand,
   isLeaveNextHand,
   balance,
+  ensName,
+  ensAvatar,
 }: {
   roomId: string | null;
   onLeaveRoom: () => void;
@@ -34,6 +36,8 @@ export function Header({
   onLeaveNextHand?: () => void;
   isLeaveNextHand?: boolean;
   balance?: string;
+  ensName?: string;
+  ensAvatar?: string;
 }) {
   const [muted, setMuted] = useState(soundManager.isMuted);
 
@@ -198,6 +202,24 @@ export function Header({
               {balance}
             </span>
             <span className="text-white/30 text-xs">ytest.usd</span>
+          </div>
+        )}
+        {ensName && (
+          <div className="flex items-center gap-2">
+            {ensAvatar ? (
+              <img
+                src={ensAvatar}
+                alt={ensName}
+                className="w-7 h-7 rounded-full border border-white/20"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-neon-purple to-neon-pink flex items-center justify-center text-[10px] font-bold border border-white/10">
+                {ensName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <span className="text-sm font-semibold text-white/80">
+              {ensName}
+            </span>
           </div>
         )}
         <ConnectButton

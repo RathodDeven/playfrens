@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { normalize } from "viem/ens";
 import { useEnsAddress } from "wagmi";
-import { mainnet } from "wagmi/chains";
+import { sepolia } from "wagmi/chains";
 
 export function FriendSearch({
   onInvite,
@@ -14,7 +14,7 @@ export function FriendSearch({
 
   const { data: resolvedAddress, isLoading } = useEnsAddress({
     name: isEnsName ? normalize(query) : undefined,
-    chainId: mainnet.id,
+    chainId: sepolia.id,
   });
 
   const displayAddress = isEnsName ? resolvedAddress : undefined;

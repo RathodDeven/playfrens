@@ -39,6 +39,7 @@ export function setupSocketHandlers(
         bigBlind: number;
         maxPlayers: number;
         chipUnit: number;
+        allowedPlayers?: string[];
       }) => {
         try {
           const address = socket.data.address;
@@ -46,6 +47,16 @@ export function setupSocketHandlers(
             socket.emit(EVENTS.ERROR, { message: "Not registered" });
             return;
           }
+
+          // Build allowedPlayers list (lowercase, auto-include creator)
+          const allowedPlayers = data.allowedPlayers
+            ? [
+                ...new Set([
+                  address,
+                  ...data.allowedPlayers.map((a: string) => a.toLowerCase()),
+                ]),
+              ]
+            : undefined;
 
           const room = roomManager.createRoom(
             {
@@ -55,6 +66,7 @@ export function setupSocketHandlers(
               bigBlind: data.bigBlind,
               maxPlayers: data.maxPlayers,
               chipUnit: data.chipUnit,
+              allowedPlayers,
             },
             (roomId, result) => {
               // Broadcast hand complete to room
@@ -175,6 +187,19 @@ export function setupSocketHandlers(
           ) {
             socket.emit(EVENTS.ERROR, { message: "Table already started" });
             return;
+          }
+
+          // Access control for private/invite-only rooms
+          if (room.config.allowedPlayers) {
+            const isAllowed = room.config.allowedPlayers.some(
+              (a) => a.toLowerCase() === address.toLowerCase(),
+            );
+            if (!isAllowed) {
+              socket.emit(EVENTS.ERROR, {
+                message: "This room is invite-only",
+              });
+              return;
+            }
           }
 
           // Auto-assign next available seat if client sends -1

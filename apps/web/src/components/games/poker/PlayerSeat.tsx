@@ -27,6 +27,7 @@ export function PlayerSeat({
   showdownCards,
   chipUnit,
   isHandInProgress,
+  onClick,
 }: {
   seat: SeatState;
   isHero: boolean;
@@ -34,6 +35,7 @@ export function PlayerSeat({
   showdownCards?: PokerCard[];
   chipUnit: number;
   isHandInProgress: boolean;
+  onClick?: () => void;
 }) {
   const displayName =
     seat.ensName || `${seat.address.slice(0, 6)}...${seat.address.slice(-4)}`;
@@ -90,13 +92,14 @@ export function PlayerSeat({
 
       {/* Player Info Panel */}
       <motion.div
-        className={`rounded-xl px-3 py-2 text-center min-w-[110px] relative transition-all ${
+        className={`rounded-xl px-3 py-2 text-center min-w-[110px] relative transition-all cursor-pointer ${
           seat.isTurn
             ? "bg-black/70 backdrop-blur-md border-2 border-neon-blue shadow-[0_0_20px_rgba(0,240,255,0.3)]"
             : seat.isFolded
               ? "bg-black/40 backdrop-blur-sm border border-white/5 opacity-40 grayscale"
               : "bg-black/60 backdrop-blur-md border border-white/10"
         } ${isHero && !seat.isFolded ? "border-neon-green/40" : ""}`}
+        onClick={onClick}
       >
         {/* Avatar */}
         <div className="flex items-center justify-center mb-0.5">
