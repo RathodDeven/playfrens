@@ -22,6 +22,7 @@ export interface HandHistoryEntry {
   pots: Array<{ amount: number; eligibleSeats: number[] }>;
   chipUnit: number;
   timestamp: number;
+  heroDelta?: number;
 }
 
 interface UseGameStateReturn {
@@ -70,15 +71,69 @@ export function useGameState(
   const recordTxnRef = useRef(onRecordTransaction);
   recordTxnRef.current = onRecordTransaction;
 
+  // Refs to avoid side-effects inside state updaters (React strict mode calls them twice)
+  const gameStateRef = useRef<PokerPlayerState | null>(null);
+  const prevGameStateRef = useRef<PokerPlayerState | null>(null);
+  const heroChipsBeforeRef = useRef<number | null>(null);
+  const buyInRecordedRef = useRef(false);
+  const leftRecordedRef = useRef(false);
+
   useEffect(() => {
     function onGameState(state: PokerPlayerState) {
-      setGameState((prev) => {
-        // Play deal sound when a new hand starts
-        if (state.isHandInProgress && !prev?.isHandInProgress) {
-          soundManager.play("deal");
+      const prev = prevGameStateRef.current;
+
+      // Play deal sound when a new hand starts
+      if (state.isHandInProgress && !prev?.isHandInProgress) {
+        soundManager.play("deal");
+
+        // Track hero's chip count at hand start for win/loss calculation
+        if (seatIndex !== null) {
+          const heroSeat = state.seats.find((s) => s.seatIndex === seatIndex);
+          heroChipsBeforeRef.current = heroSeat?.chipCount ?? null;
         }
-        return state;
-      });
+      }
+
+      // Hand just ended — compute win/loss from chip delta
+      if (
+        !state.isHandInProgress &&
+        prev?.isHandInProgress &&
+        heroChipsBeforeRef.current !== null &&
+        seatIndex !== null
+      ) {
+        const heroSeat = state.seats.find((s) => s.seatIndex === seatIndex);
+        if (heroSeat) {
+          const delta = heroSeat.chipCount - heroChipsBeforeRef.current;
+          const unit = state.chipUnit || 1;
+          if (delta > 0 && recordTxnRef.current) {
+            recordTxnRef.current({
+              type: "hand_win",
+              amount: delta * unit,
+              timestamp: Date.now(),
+              details: `Hand #${state.handNumber}`,
+            });
+          } else if (delta < 0 && recordTxnRef.current) {
+            recordTxnRef.current({
+              type: "hand_loss",
+              amount: Math.abs(delta) * unit,
+              timestamp: Date.now(),
+              details: `Hand #${state.handNumber}`,
+            });
+          }
+          // Update the latest hand history entry with hero's chip delta
+          if (delta !== 0) {
+            setHandHistory((prev) => {
+              if (prev.length === 0) return prev;
+              const latest = prev[0];
+              return [{ ...latest, heroDelta: delta }, ...prev.slice(1)];
+            });
+          }
+        }
+        heroChipsBeforeRef.current = null;
+      }
+
+      prevGameStateRef.current = state;
+      gameStateRef.current = state;
+      setGameState(state);
 
       // Clear hand result when a new hand starts so overlay hides
       if (state.isHandInProgress) {
@@ -104,6 +159,9 @@ export function useGameState(
       if (data.seatIndex !== undefined) {
         setSeatIndex(data.seatIndex);
       }
+      // Reset dedup flags for new room
+      buyInRecordedRef.current = false;
+      leftRecordedRef.current = false;
     }
 
     function onPlayerJoined(data: { seatIndex: number; address: string }) {
@@ -111,6 +169,8 @@ export function useGameState(
       setPendingJoin((pending) => {
         if (pending) {
           setSeatIndex(data.seatIndex);
+          buyInRecordedRef.current = false;
+          leftRecordedRef.current = false;
           return false;
         }
         return pending;
@@ -144,51 +204,37 @@ export function useGameState(
           },
           ...prev,
         ]);
-
-        // Record transaction for the hero
-        if (recordTxnRef.current && seatIndex !== null) {
-          const heroWin = result.winners.find((w) => w.seatIndex === seatIndex);
-          if (heroWin) {
-            recordTxnRef.current({
-              type: "hand_win",
-              amount: heroWin.amount * unit,
-              timestamp: Date.now(),
-              details: `Hand #${handNum}${heroWin.hand ? ` — ${heroWin.hand}` : ""}`,
-            });
-          } else {
-            // Not a winner — record loss based on pot contribution
-            const totalPot =
-              result.pots?.reduce((s, p) => s + p.amount, 0) ?? 0;
-            const potPerPlayer =
-              result.winners.length > 0
-                ? Math.floor(
-                    (totalPot -
-                      result.winners.reduce((s, w) => s + w.amount, 0)) /
-                      Math.max(
-                        result.pots?.[0]?.eligibleSeats?.length ??
-                          2 - result.winners.length,
-                        1,
-                      ),
-                  )
-                : 0;
-            if (potPerPlayer > 0) {
-              recordTxnRef.current({
-                type: "hand_loss",
-                amount: potPerPlayer * unit,
-                timestamp: Date.now(),
-                details: `Hand #${handNum}`,
-              });
-            }
-          }
-        }
+        // Win/loss transactions are now recorded in onGameState (chip delta approach)
       }
     }
 
     function onPlayerLeft(data: { seatIndex: number }) {
       if (data.seatIndex === seatIndex) {
+        // Record cash-out for hero leaving (only once)
+        if (recordTxnRef.current && !leftRecordedRef.current) {
+          leftRecordedRef.current = true;
+          const current = gameStateRef.current;
+          if (current) {
+            const heroSeat = current.seats.find(
+              (s) => s.seatIndex === seatIndex,
+            );
+            if (heroSeat) {
+              const unit = current.chipUnit || 1;
+              recordTxnRef.current({
+                type: "cash_out",
+                amount: heroSeat.chipCount * unit,
+                timestamp: Date.now(),
+                details: `${heroSeat.chipCount} chips`,
+              });
+            }
+          }
+        }
+
         setRoomId(null);
         setSeatIndex(null);
         setGameState(null);
+        gameStateRef.current = null;
+        prevGameStateRef.current = null;
         setLastHandResult(null);
         setHandHistory([]);
       }
@@ -201,9 +247,13 @@ export function useGameState(
     }
 
     function onCashedOut() {
+      // Cash-out transaction is recorded in onPlayerLeft (which also fires)
+      // Just reset state here
       setRoomId(null);
       setSeatIndex(null);
       setGameState(null);
+      gameStateRef.current = null;
+      prevGameStateRef.current = null;
       setLastHandResult(null);
       setHandHistory([]);
     }
@@ -245,9 +295,27 @@ export function useGameState(
         });
     }
 
-    function onSessionReady() {
-      console.log("[Game] Session ready — hand starting");
+    function onSessionReady(data: { sessionId?: string }) {
+      console.log("[Game] Session ready — hand starting", data?.sessionId);
       setIsSigningSession(false);
+
+      // Record buy-in transaction (only once per session)
+      if (recordTxnRef.current && !buyInRecordedRef.current) {
+        buyInRecordedRef.current = true;
+        const current = gameStateRef.current;
+        if (current) {
+          const heroSeat = current.seats.find((s) => s.seatIndex === seatIndex);
+          if (heroSeat) {
+            const unit = current.chipUnit || 1;
+            recordTxnRef.current({
+              type: "buy_in",
+              amount: heroSeat.chipCount * unit,
+              timestamp: Date.now(),
+              details: `${heroSeat.chipCount} chips`,
+            });
+          }
+        }
+      }
     }
 
     function onSessionError(data: { message: string }) {

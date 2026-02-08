@@ -26,12 +26,14 @@ export function Header({
   isHandInProgress,
   onLeaveNextHand,
   isLeaveNextHand,
+  balance,
 }: {
   roomId: string | null;
   onLeaveRoom: () => void;
   isHandInProgress?: boolean;
   onLeaveNextHand?: () => void;
   isLeaveNextHand?: boolean;
+  balance?: string;
 }) {
   const [muted, setMuted] = useState(soundManager.isMuted);
 
@@ -189,6 +191,14 @@ export function Header({
           >
             Leave Table
           </motion.button>
+        )}
+        {balance && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-light text-sm">
+            <span className="text-neon-green font-mono font-bold">
+              {balance}
+            </span>
+            <span className="text-white/30 text-xs">ytest.usd</span>
+          </div>
         )}
         <ConnectButton
           showBalance={false}

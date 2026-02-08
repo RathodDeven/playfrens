@@ -80,4 +80,5 @@ export interface HandResult {
   pots: PotInfo[];
   handNumber?: number;
   chipUnit?: number;
+  showdownCards?: Array<{ seatIndex: number; cards: PokerCard[] }>;
 }

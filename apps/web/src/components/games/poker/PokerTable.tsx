@@ -133,6 +133,13 @@ export function PokerTable({
           <AnimatePresence>
             {gameState.seats.map((seat) => {
               const positionIndex = (seat.seatIndex - heroSeatIndex + 4) % 4;
+              // Show showdown cards when hand result is displayed
+              const showdownEntry =
+                lastHandResult && !gameState.isHandInProgress
+                  ? lastHandResult.showdownCards?.find(
+                      (sc) => sc.seatIndex === seat.seatIndex,
+                    )
+                  : undefined;
               return (
                 <div
                   key={seat.seatIndex}
@@ -147,6 +154,7 @@ export function PokerTable({
                         ? gameState.holeCards
                         : undefined
                     }
+                    showdownCards={showdownEntry?.cards}
                     chipUnit={chipUnit}
                     isHandInProgress={gameState.isHandInProgress}
                   />
@@ -328,6 +336,7 @@ export function PokerTable({
               <HandHistory
                 entries={handHistory}
                 chipUnit={chipUnit}
+                heroSeatIndex={heroSeatIndex}
                 onClose={() => setShowHistory(false)}
               />
             </motion.div>
@@ -342,6 +351,10 @@ export function PokerTable({
             legalActions={gameState.legalActions}
             onAction={onAction}
             chipUnit={chipUnit}
+            totalPot={
+              gameState.pots.reduce((s, p) => s + p.amount, 0) +
+              gameState.seats.reduce((s, seat) => s + seat.betAmount, 0)
+            }
           />
         ) : gameState.isHandInProgress ? (
           <p className="text-white/40 text-sm">

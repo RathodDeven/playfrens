@@ -9,6 +9,8 @@ const typeLabels: Record<string, { label: string; color: string }> = {
   deposit: { label: "Deposit", color: "text-neon-blue" },
   withdraw: { label: "Withdraw", color: "text-amber-400" },
   faucet: { label: "Faucet", color: "text-neon-purple" },
+  buy_in: { label: "Buy-in", color: "text-orange-400" },
+  cash_out: { label: "Cash Out", color: "text-cyan-400" },
 };
 
 export function TransactionHistory({
@@ -72,7 +74,8 @@ export function TransactionHistory({
                 const isPositive =
                   entry.type === "hand_win" ||
                   entry.type === "deposit" ||
-                  entry.type === "faucet";
+                  entry.type === "faucet" ||
+                  entry.type === "cash_out";
                 return (
                   <div
                     key={entry.id}
@@ -100,7 +103,10 @@ export function TransactionHistory({
                         className={`text-xs font-mono font-bold ${isPositive ? "text-neon-green" : "text-red-400"}`}
                       >
                         {isPositive ? "+" : "-"}
-                        {formatYusd(Math.abs(entry.amount))}
+                        {formatYusd(Math.abs(entry.amount))}{" "}
+                        <span className="text-white/30 font-normal">
+                          ytest.usd
+                        </span>
                       </p>
                       <p className="text-[9px] text-white/25">
                         {new Date(entry.timestamp).toLocaleString()}

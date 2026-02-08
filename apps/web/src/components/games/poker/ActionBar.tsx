@@ -35,14 +35,48 @@ const actionStyles: Record<
   },
 };
 
+function ChipIcon() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="shrink-0 inline-block"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="2"
+        fill="currentColor"
+        fillOpacity="0.2"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        fill="none"
+      />
+      <circle cx="12" cy="12" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function ActionBar({
   legalActions,
   onAction,
   chipUnit,
+  totalPot,
 }: {
   legalActions: LegalAction[];
   onAction: (action: PokerAction, betSize?: number) => void;
   chipUnit: number;
+  totalPot: number;
 }) {
   const [betSize, setBetSize] = useState<number>(0);
 
@@ -52,16 +86,21 @@ export function ActionBar({
 
   if (legalActions.length === 0) return null;
 
-  const handleAction = (action: PokerAction, la: LegalAction) => {
+  const effectiveBetSize = betSize || betAction?.minBet || 0;
+
+  const handleAction = (action: PokerAction) => {
     soundManager.play(action as any);
     if (action === "bet" || action === "raise") {
-      onAction(action, betSize || la.minBet);
+      onAction(action, effectiveBetSize);
     } else {
       onAction(action);
     }
   };
 
-  // Preset bet amounts
+  // Preset bet amounts — pot-based (standard poker presets)
+  const clamp = (v: number, min: number, max: number) =>
+    Math.min(Math.max(Math.floor(v), min), max);
+
   const presets =
     betAction?.minBet != null && betAction?.maxBet != null
       ? [
@@ -70,24 +109,12 @@ export function ActionBar({
             value: betAction.minBet,
           },
           {
-            label: "1/2",
-            value: Math.min(
-              Math.max(
-                Math.floor((betAction.maxBet + betAction.minBet) / 4),
-                betAction.minBet,
-              ),
-              betAction.maxBet,
-            ),
+            label: "½ Pot",
+            value: clamp(totalPot / 2, betAction.minBet, betAction.maxBet),
           },
           {
             label: "Pot",
-            value: Math.min(
-              Math.max(
-                Math.floor((betAction.maxBet + betAction.minBet) / 2),
-                betAction.minBet,
-              ),
-              betAction.maxBet,
-            ),
+            value: clamp(totalPot, betAction.minBet, betAction.maxBet),
           },
           {
             label: "All In",
@@ -106,17 +133,36 @@ export function ActionBar({
       <div className="flex gap-2">
         {legalActions.map((la) => {
           const style = actionStyles[la.action];
+          const isBetOrRaise = la.action === "bet" || la.action === "raise";
+          const isCall = la.action === "call";
+          const chipAmount = isBetOrRaise
+            ? effectiveBetSize
+            : isCall
+              ? la.minBet
+              : undefined;
           return (
             <motion.button
               key={la.action}
               whileHover={{ scale: 1.05, y: -1 }}
               whileTap={{ scale: 0.95 }}
               transition={{ type: "spring", damping: 15 }}
-              onClick={() => handleAction(la.action, la)}
-              className={`px-5 py-2.5 rounded-xl font-bold text-sm ${style.bg} ${style.text} transition-colors border border-white/5`}
+              onClick={() => handleAction(la.action)}
+              className={`px-5 py-2 rounded-xl font-bold text-sm ${style.bg} ${style.text} transition-colors border border-white/5 min-w-[80px]`}
             >
-              {style.label}
-              {la.action === "call" && la.minBet ? ` ${la.minBet}` : ""}
+              <span className="flex items-center justify-center gap-1">
+                {style.label}
+                {chipAmount != null && chipAmount > 0 && (
+                  <>
+                    {" "}
+                    <ChipIcon /> {chipAmount}
+                  </>
+                )}
+              </span>
+              {chipAmount != null && chipAmount > 0 && (
+                <span className="block text-[9px] opacity-50 font-mono font-normal mt-0.5">
+                  {formatYusd(chipAmount * chipUnit)} ytest.usd
+                </span>
+              )}
             </motion.button>
           );
         })}
@@ -146,19 +192,25 @@ export function ActionBar({
             type="range"
             min={betAction.minBet || 0}
             max={betAction.maxBet || 1000}
-            value={betSize || betAction.minBet || 0}
+            value={effectiveBetSize}
             onChange={(e) => setBetSize(Number(e.target.value))}
             className="w-24 accent-neon-green"
           />
-          <input
-            type="number"
-            value={betSize || betAction.minBet || 0}
-            onChange={(e) => setBetSize(Number(e.target.value))}
-            className="w-14 px-1.5 py-0.5 rounded-lg bg-surface-light border border-white/10 text-white text-center text-xs font-mono"
-          />
-          <span className="text-[9px] text-white/30 whitespace-nowrap">
-            {formatYusd((betSize || betAction.minBet || 0) * chipUnit)}
-          </span>
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-1">
+              <ChipIcon />
+              <input
+                type="number"
+                value={effectiveBetSize}
+                onChange={(e) => setBetSize(Number(e.target.value))}
+                className="w-14 px-1.5 py-0.5 rounded-lg bg-surface-light border border-white/10 text-white text-center text-xs font-mono"
+              />
+            </div>
+            <span className="text-[9px] text-white/30 whitespace-nowrap mt-0.5">
+              {formatYusd(effectiveBetSize * chipUnit)}{" "}
+              <span className="text-white/20">ytest.usd</span>
+            </span>
+          </div>
         </div>
       )}
     </motion.div>

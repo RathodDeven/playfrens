@@ -3,7 +3,9 @@ export type TransactionType =
   | "hand_loss"
   | "deposit"
   | "withdraw"
-  | "faucet";
+  | "faucet"
+  | "buy_in"
+  | "cash_out";
 
 export interface TransactionEntry {
   id: string;

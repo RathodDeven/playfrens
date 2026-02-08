@@ -82,20 +82,9 @@ export function setupSocketHandlers(
                 // Broadcast updated state after all removals
                 if (removed.length > 0) {
                   broadcastGameState(io, roomId, roomManager);
-
-                  // Check if room is now empty — close session + delete
-                  if (room.getPlayerCount() === 0) {
-                    if (yellowSessions.hasSession(roomId)) {
-                      yellowSessions
-                        .closeSession(roomId)
-                        .catch((err) =>
-                          console.error("[Yellow] Close failed:", err),
-                        );
-                    }
-                    roomManager.deleteRoom(roomId);
-                  }
                 }
 
+                // Submit hand allocations first
                 console.log(
                   `[Socket] Submitting hand allocations to Yellow for room ${roomId}`,
                 );
@@ -104,6 +93,26 @@ export function setupSocketHandlers(
                   .catch((err) =>
                     console.error("[Yellow] Submit failed:", err),
                   );
+
+                // Close session + delete room when fewer than 2 players
+                if (
+                  removed.length > 0 &&
+                  room.getPlayerCount() < 2 &&
+                  yellowSessions.hasSession(roomId)
+                ) {
+                  console.log(
+                    `[Yellow] Room has ${room.getPlayerCount()} player(s) after removals — closing session for room ${roomId}`,
+                  );
+                  yellowSessions
+                    .closeSession(roomId, room)
+                    .catch((err) =>
+                      console.error("[Yellow] Close failed:", err),
+                    );
+                }
+
+                if (room.getPlayerCount() === 0) {
+                  roomManager.deleteRoom(roomId);
+                }
               }
             },
           );
@@ -550,7 +559,9 @@ function handleLeaveRoom(
     }
 
     // Snapshot allocations BEFORE removing the player so chip data is preserved
-    if (yellowSessions.hasSession(roomId) && room.gameType === "poker") {
+    const hasSession =
+      yellowSessions.hasSession(roomId) && room.gameType === "poker";
+    if (hasSession) {
       console.log(
         `[Yellow] Snapshotting allocations before removing seat ${roomInfo.seatIndex} from room ${roomId}`,
       );
@@ -572,15 +583,18 @@ function handleLeaveRoom(
     // Broadcast updated game state to remaining players
     broadcastGameState(io, roomId, roomManager);
 
-    // Delete room if empty — close session to distribute funds
+    // Close session + delete room when fewer than 2 players remain
+    // (can't continue playing, so distribute funds back to Unified Balances)
+    if (room.getPlayerCount() < 2 && hasSession) {
+      console.log(
+        `[Yellow] Room has ${room.getPlayerCount()} player(s) — closing session for room ${roomId}`,
+      );
+      yellowSessions
+        .closeSession(roomId, room as PokerRoom)
+        .catch((err) => console.error("[Yellow] Close failed:", err));
+    }
+
     if (room.getPlayerCount() === 0) {
-      if (yellowSessions.hasSession(roomId)) {
-        console.log(`[Yellow] Room empty — closing session for room ${roomId}`);
-        // lastAllocations was snapshot above with all players still present
-        yellowSessions
-          .closeSession(roomId)
-          .catch((err) => console.error("[Yellow] Close failed:", err));
-      }
       roomManager.deleteRoom(roomId);
       console.log(`[Room] Deleted empty room: ${roomId}`);
     }

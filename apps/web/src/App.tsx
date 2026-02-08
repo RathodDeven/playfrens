@@ -105,6 +105,14 @@ export function App() {
     prevRoomId.current = roomId;
   }, [roomId, refetchBalance, refetchWallet]);
 
+  // Refresh balance after each hand completes
+  useEffect(() => {
+    if (lastHandResult) {
+      const timer = setTimeout(() => refetchBalance(), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [lastHandResult, refetchBalance]);
+
   // Show errors via react-hot-toast
   useEffect(() => {
     if (error) {
@@ -218,6 +226,7 @@ export function App() {
         isHandInProgress={gameState?.isHandInProgress}
         onLeaveNextHand={leaveNextHand}
         isLeaveNextHand={isLeaveNextHand}
+        balance={balance}
       />
 
       {/* Main content */}

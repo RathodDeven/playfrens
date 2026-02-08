@@ -24,12 +24,14 @@ export function PlayerSeat({
   seat,
   isHero,
   holeCards,
+  showdownCards,
   chipUnit,
   isHandInProgress,
 }: {
   seat: SeatState;
   isHero: boolean;
   holeCards?: PokerCard[];
+  showdownCards?: PokerCard[];
   chipUnit: number;
   isHandInProgress: boolean;
 }) {
@@ -38,6 +40,7 @@ export function PlayerSeat({
 
   const showCards = isHandInProgress && !seat.isFolded;
   const heroHasCards = isHero && holeCards && holeCards.length > 0;
+  const hasShowdownCards = showdownCards && showdownCards.length > 0;
 
   return (
     <motion.div
@@ -50,25 +53,34 @@ export function PlayerSeat({
     >
       {/* Hole Cards */}
       <div className="flex gap-0.5">
-        {showCards && heroHasCards
-          ? (holeCards ?? []).map((card, i) => (
+        {hasShowdownCards
+          ? (showdownCards ?? []).map((card, i) => (
               <Card
-                key={`${card.rank}-${card.suit}`}
+                key={`sd-${card.rank}-${card.suit}`}
                 card={card}
-                delay={i * 0.15}
-                size="normal"
+                delay={i * 0.1}
+                size={isHero ? "normal" : "small"}
               />
             ))
-          : showCards
-            ? [0, 1].map((i) => (
+          : showCards && heroHasCards
+            ? (holeCards ?? []).map((card, i) => (
                 <Card
-                  key={`hidden-${i}`}
-                  faceDown
+                  key={`${card.rank}-${card.suit}`}
+                  card={card}
                   delay={i * 0.15}
-                  size={isHero ? "normal" : "small"}
+                  size="normal"
                 />
               ))
-            : null}
+            : showCards
+              ? [0, 1].map((i) => (
+                  <Card
+                    key={`hidden-${i}`}
+                    faceDown
+                    delay={i * 0.15}
+                    size={isHero ? "normal" : "small"}
+                  />
+                ))
+              : null}
       </div>
 
       {/* Bet */}

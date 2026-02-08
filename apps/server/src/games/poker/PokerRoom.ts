@@ -35,6 +35,10 @@ export class PokerRoom extends GameRoom {
   private foldedSeats: Set<number> = new Set();
   private lastChipSnapshot: Map<number, number> | null = null;
   private lastPlayerSnapshot: Map<number, string> | null = null;
+  private showdownCardsCache: Array<{
+    seatIndex: number;
+    cards: PokerCard[];
+  }> | null = null;
 
   constructor(
     roomId: string,
@@ -163,6 +167,7 @@ export class PokerRoom extends GameRoom {
           `[Poker] Betting rounds completed — pot: ${this.calculateTotalPot()}, pots: ${JSON.stringify(this.safeGetPots())}`,
         );
         this.captureWinnerBeforeShowdown();
+        this.captureHoleCardsForShowdown();
         this.table.showdown();
         // showdown sets isHandInProgress to false — loop will exit
       } else {
@@ -227,6 +232,29 @@ export class PokerRoom extends GameRoom {
       }
     } catch (err) {
       console.error("[Poker] captureWinnerBeforeShowdown error:", err);
+    }
+  }
+
+  private captureHoleCardsForShowdown(): void {
+    this.showdownCardsCache = null;
+    try {
+      const allHoleCards = this.table.holeCards();
+      if (!allHoleCards) return;
+      const cards: Array<{ seatIndex: number; cards: PokerCard[] }> = [];
+      for (const [seatIndex] of this.players) {
+        const playerCards = allHoleCards[seatIndex];
+        if (playerCards && !this.foldedSeats.has(seatIndex)) {
+          cards.push({
+            seatIndex,
+            cards: playerCards.map((c: any) => this.mapCard(c)),
+          });
+        }
+      }
+      if (cards.length > 0) {
+        this.showdownCardsCache = cards;
+      }
+    } catch (err) {
+      console.error("[Poker] captureHoleCardsForShowdown error:", err);
     }
   }
 
@@ -295,7 +323,9 @@ export class PokerRoom extends GameRoom {
       pots: this.mapPots(),
       handNumber: this.handNumber,
       chipUnit: this.config.chipUnit,
+      showdownCards: this.showdownCardsCache ?? undefined,
     };
+    this.showdownCardsCache = null;
 
     // Snapshot chip counts and player addresses BEFORE removing players
     // so that submitHandAllocations can use accurate data
