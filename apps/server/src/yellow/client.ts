@@ -127,7 +127,23 @@ export class YellowClient {
             console.log("[Yellow] Auth verify response");
           }
           if (msg?.res?.[1] === RPCMethod.Error) {
-            console.error("[Yellow] Auth error:", msg?.res?.[2]?.error);
+            const errorMsg = msg?.res?.[2]?.error;
+            console.error("[Yellow] Auth error:", errorMsg);
+            if (
+              typeof errorMsg === "string" &&
+              errorMsg.includes("session key already exists but is expired")
+            ) {
+              console.log(
+                "[Yellow] Session key expired on Clearnode, generating new key...",
+              );
+              this.sessionPrivateKey = generatePrivateKey();
+              this.sessionSigner =
+                createECDSAMessageSigner(this.sessionPrivateKey);
+              this.authenticate().catch((err) => {
+                console.error("[Yellow] Re-auth with new key failed:", err);
+              });
+              return;
+            }
           }
           this.handleMessage(msg);
         } catch (err) {
@@ -201,7 +217,7 @@ export class YellowClient {
           amount: "1000000000", // Large allowance for server (trusted judge)
         },
       ],
-      expires_at: BigInt(Math.floor(Date.now() / 1000) + 3600),
+      expires_at: BigInt(Math.floor(Date.now() / 1000) + 86400),
       scope: this.scope,
     };
     this.lastAuthParams = authParams;
@@ -318,7 +334,7 @@ export class YellowClient {
     const authParams: AuthParams = this.lastAuthParams ?? {
       session_key: privateKeyToAccount(this.sessionPrivateKey).address,
       allowances: [{ asset: "ytest.usd", amount: "1000000000" }],
-      expires_at: BigInt(Math.floor(Date.now() / 1000) + 3600),
+      expires_at: BigInt(Math.floor(Date.now() / 1000) + 86400),
       scope: this.scope,
     };
 
