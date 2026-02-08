@@ -114,10 +114,19 @@ export function computeAllocations(
     0,
   );
   if (totalChips === 0) {
-    return checksumParticipants.map((p) => ({
+    // Safety net: distribute totalDeposit equally among non-server participants
+    // rather than returning all zeros (which Clearnode rejects as "not fully redistributed")
+    const playerParticipants = checksumParticipants.filter(
+      (_, i) => i < checksumParticipants.length - 1,
+    );
+    const equalShare =
+      playerParticipants.length > 0
+        ? roundAmount(totalDeposit / playerParticipants.length)
+        : 0;
+    return checksumParticipants.map((p, i) => ({
       participant: p as Address,
       asset: ASSET,
-      amount: "0",
+      amount: i < checksumParticipants.length - 1 ? String(equalShare) : "0",
     }));
   }
 

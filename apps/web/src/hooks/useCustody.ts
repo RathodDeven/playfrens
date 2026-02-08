@@ -1,12 +1,7 @@
 import { CustodyAbi, Erc20Abi } from "@erc7824/nitrolite";
 import { CONTRACTS } from "@playfrens/shared";
 import { useCallback, useState } from "react";
-import {
-  type Address,
-  parseUnits,
-  type PublicClient,
-  type WalletClient,
-} from "viem";
+import { type Address, parseUnits } from "viem";
 import { baseSepolia } from "viem/chains";
 import { usePublicClient, useWalletClient } from "wagmi";
 

@@ -28,10 +28,13 @@ export class PokerRoom extends GameRoom {
   private handNumber = 0;
   private onHandComplete?: (result: HandResult) => void;
   private pendingLeaves: Set<number> = new Set();
+  private pendingLeaveNextHand: Set<number> = new Set();
   private recentlyRemoved: number[] = [];
   private lastActions: Map<number, { action: string; amount?: number }> =
     new Map();
   private foldedSeats: Set<number> = new Set();
+  private lastChipSnapshot: Map<number, number> | null = null;
+  private lastPlayerSnapshot: Map<number, string> | null = null;
 
   constructor(
     roomId: string,
@@ -294,6 +297,13 @@ export class PokerRoom extends GameRoom {
       chipUnit: this.config.chipUnit,
     };
 
+    // Snapshot chip counts and player addresses BEFORE removing players
+    // so that submitHandAllocations can use accurate data
+    this.lastChipSnapshot = this.getChipCounts();
+    this.lastPlayerSnapshot = new Map(
+      [...this.players].map(([s, p]) => [s, p.address]),
+    );
+
     const removedSeats = this.finalizePendingLeaves();
     if (removedSeats.length > 0) {
       this.recentlyRemoved = removedSeats;
@@ -541,5 +551,45 @@ export class PokerRoom extends GameRoom {
       chips.set(seatIndex, (seat as any)?.stack ?? 0);
     }
     return chips;
+  }
+
+  getChipSnapshot(): Map<number, number> | null {
+    return this.lastChipSnapshot;
+  }
+
+  getPlayerSnapshot(): Map<number, string> | null {
+    return this.lastPlayerSnapshot;
+  }
+
+  clearSnapshots(): void {
+    this.lastChipSnapshot = null;
+    this.lastPlayerSnapshot = null;
+  }
+
+  requestLeaveNextHand(seatIndex: number): boolean {
+    if (!this.players.has(seatIndex)) return false;
+    this.pendingLeaveNextHand.add(seatIndex);
+    return true;
+  }
+
+  isLeaveNextHandPending(seatIndex: number): boolean {
+    return this.pendingLeaveNextHand.has(seatIndex);
+  }
+
+  cancelLeaveNextHand(seatIndex: number): void {
+    this.pendingLeaveNextHand.delete(seatIndex);
+  }
+
+  processLeaveNextHand(): number[] {
+    if (this.pendingLeaveNextHand.size === 0) return [];
+    const removed: number[] = [];
+    for (const seatIndex of this.pendingLeaveNextHand) {
+      if (this.players.has(seatIndex)) {
+        this.removePlayer(seatIndex);
+        removed.push(seatIndex);
+      }
+    }
+    this.pendingLeaveNextHand.clear();
+    return removed;
   }
 }

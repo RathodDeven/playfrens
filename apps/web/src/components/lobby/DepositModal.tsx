@@ -186,9 +186,7 @@ export function DepositModal({
                   disabled={isCustodyDepositing || !depositAmount}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-neon-blue/80 to-neon-purple/80 text-white font-bold hover:from-neon-blue hover:to-neon-purple transition-all disabled:opacity-50"
                 >
-                  {isCustodyDepositing
-                    ? "Depositing..."
-                    : "Deposit to Custody"}
+                  {isCustodyDepositing ? "Depositing..." : "Deposit to Custody"}
                 </motion.button>
               </div>
             )}

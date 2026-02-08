@@ -1,6 +1,6 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { motion } from "motion/react";
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useAccount, useEnsAvatar, useEnsName } from "wagmi";
 import { mainnet } from "wagmi/chains";
@@ -12,6 +12,7 @@ import { useGameState } from "./hooks/useGameState";
 import { useSocket } from "./hooks/useSocket";
 import { useWalletBalance } from "./hooks/useWalletBalance";
 import { useYellow } from "./hooks/useYellow";
+import { type TransactionEntry, getStore } from "./lib/transactions";
 
 export function App() {
   const { address, isConnected } = useAccount();
@@ -40,6 +41,31 @@ export function App() {
     requestTokens,
   } = useYellow(address);
 
+  // Transaction history
+  const txnStore = useMemo(
+    () => (address ? getStore(address) : null),
+    [address],
+  );
+  const [transactions, setTransactions] = useState<TransactionEntry[]>([]);
+  useEffect(() => {
+    if (txnStore) setTransactions(txnStore.getAll());
+  }, [txnStore]);
+
+  const recordTransaction = useCallback(
+    (entry: Omit<TransactionEntry, "id">) => {
+      if (!txnStore) return;
+      txnStore.add(entry);
+      setTransactions(txnStore.getAll());
+    },
+    [txnStore],
+  );
+
+  const clearTransactions = useCallback(() => {
+    if (!txnStore) return;
+    txnStore.clear();
+    setTransactions([]);
+  }, [txnStore]);
+
   const {
     gameState,
     lastHandResult,
@@ -48,15 +74,15 @@ export function App() {
     seatIndex,
     error,
     isSigningSession,
+    isLeaveNextHand,
     createRoom,
     joinRoom,
     leaveRoom,
-    cashOut,
+    leaveNextHand,
     startHand,
     sendAction,
-    sendReaction,
     clearError,
-  } = useGameState(socket, client, address);
+  } = useGameState(socket, client, address, recordTransaction);
   const { balance: walletBalance, refetch: refetchWallet } =
     useWalletBalance(address);
   const {
@@ -66,6 +92,19 @@ export function App() {
     isWithdrawing: isCustodyWithdrawing,
   } = useCustody(address);
 
+  // Refresh balances when player leaves a room
+  const prevRoomId = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevRoomId.current && !roomId) {
+      const timer = setTimeout(() => {
+        refetchBalance();
+        refetchWallet();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+    prevRoomId.current = roomId;
+  }, [roomId, refetchBalance, refetchWallet]);
+
   // Show errors via react-hot-toast
   useEffect(() => {
     if (error) {
@@ -74,10 +113,25 @@ export function App() {
     }
   }, [error, clearError]);
 
+  // Read invite code from URL
+  const [inviteCode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("code")?.toUpperCase() ?? null;
+  });
+
+  // Clear URL param once consumed (when user joins a room or dismisses)
+  useEffect(() => {
+    if (inviteCode && roomId) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [inviteCode, roomId]);
+
+  const isInGame = !!(roomId && gameState);
+
   // Not connected
   if (!isConnected) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-8 p-6">
+      <div className="h-screen flex flex-col items-center justify-center gap-8 p-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -105,7 +159,7 @@ export function App() {
   // Authorizing with Yellow Network
   if (!isAuthorized) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6">
+      <div className="h-screen flex flex-col items-center justify-center gap-6 p-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -151,11 +205,23 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header roomId={roomId} onLeaveRoom={leaveRoom} />
+    <div
+      className={
+        isInGame
+          ? "h-screen overflow-hidden flex flex-col"
+          : "min-h-screen flex flex-col"
+      }
+    >
+      <Header
+        roomId={roomId}
+        onLeaveRoom={leaveRoom}
+        isHandInProgress={gameState?.isHandInProgress}
+        onLeaveNextHand={leaveNextHand}
+        isLeaveNextHand={isLeaveNextHand}
+      />
 
       {/* Main content */}
-      {roomId && gameState ? (
+      {isInGame ? (
         <PokerTable
           gameState={gameState}
           lastHandResult={lastHandResult}
@@ -178,19 +244,40 @@ export function App() {
           onDeposit={async () => {
             await requestTokens();
             await refetchBalance();
+            recordTransaction({
+              type: "faucet",
+              amount: 100,
+              timestamp: Date.now(),
+              details: "Testnet faucet",
+            });
           }}
           onCustodyDeposit={async (amount) => {
             await custodyDeposit(amount);
             await refetchWallet();
             await refetchBalance();
+            recordTransaction({
+              type: "deposit",
+              amount: Number(amount),
+              timestamp: Date.now(),
+              details: "Custody deposit",
+            });
           }}
           onCustodyWithdraw={async (amount) => {
             await custodyWithdraw(amount);
             await refetchWallet();
             await refetchBalance();
+            recordTransaction({
+              type: "withdraw",
+              amount: Number(amount),
+              timestamp: Date.now(),
+              details: "Custody withdrawal",
+            });
           }}
           isCustodyDepositing={isCustodyDepositing}
           isCustodyWithdrawing={isCustodyWithdrawing}
+          transactions={transactions}
+          onClearTransactions={clearTransactions}
+          inviteCode={inviteCode ?? undefined}
         />
       )}
     </div>

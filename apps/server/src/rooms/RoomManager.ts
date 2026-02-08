@@ -1,5 +1,10 @@
-import type { GameType, HandResult, RoomConfig, RoomInfo } from "@playfrens/shared";
-import { GameRoom } from "../games/GameRoom.js";
+import type {
+  GameType,
+  HandResult,
+  RoomConfig,
+  RoomInfo,
+} from "@playfrens/shared";
+import type { GameRoom } from "../games/GameRoom.js";
 import { PokerRoom } from "../games/poker/PokerRoom.js";
 
 export class RoomManager {

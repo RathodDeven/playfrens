@@ -5,6 +5,8 @@ export const EVENTS = {
   JOIN_ROOM: "join-room",
   PLAYER_JOINED: "player-joined",
   LEAVE_ROOM: "leave-room",
+  LEAVE_NEXT_HAND: "leave-next-hand",
+  LEAVE_NEXT_HAND_ACK: "leave-next-hand-ack",
   CASH_OUT: "cash-out",
   PLAYER_LEFT: "player-left",
   ROOM_LIST: "room-list",

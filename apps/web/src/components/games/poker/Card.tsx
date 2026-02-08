@@ -9,67 +9,87 @@ const suitSymbols: Record<string, string> = {
 };
 
 const suitColors: Record<string, string> = {
-  spades: "text-gray-800",
-  hearts: "text-red-500",
-  diamonds: "text-red-500",
-  clubs: "text-gray-800",
+  spades: "text-gray-900",
+  hearts: "text-red-600",
+  diamonds: "text-red-600",
+  clubs: "text-gray-900",
 };
 
-// Map rank for display (T -> 10)
 function displayRank(rank: string): string {
   if (rank === "T") return "10";
   return rank;
 }
 
+const sizeClasses = {
+  small: "w-10 h-14",
+  normal: "w-14 h-20",
+};
+
+const rankSizes = {
+  small: "text-base",
+  normal: "text-2xl",
+};
+
+const suitSizes = {
+  small: "text-sm",
+  normal: "text-xl",
+};
+
 export function Card({
   card,
   faceDown = false,
   delay = 0,
+  size = "normal",
+  community = false,
 }: {
   card?: PokerCard;
   faceDown?: boolean;
   delay?: number;
+  size?: "small" | "normal";
+  community?: boolean;
 }) {
   const isFaceDown = faceDown || !card;
 
+  // Community cards: fly from deck position with flip
+  // Hole cards: scale up with spring bounce
+  const initial = community
+    ? { opacity: 0, y: -80, scale: 0.4, rotateY: 180 }
+    : { opacity: 0, scale: 0.3 };
+
+  const animate = community
+    ? { opacity: 1, y: 0, scale: 1, rotateY: 0 }
+    : { opacity: 1, scale: 1 };
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: -20, scale: 0.8 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      initial={initial}
+      animate={animate}
       transition={{
         type: "spring",
-        damping: 15,
+        damping: community ? 18 : 15,
+        stiffness: community ? 200 : 300,
         delay,
       }}
-      className="w-14 h-20"
+      className={sizeClasses[size]}
+      style={{ perspective: "600px" }}
     >
       {isFaceDown ? (
         <div className="w-full h-full rounded-lg shadow-lg card-back border border-purple-500/30 flex items-center justify-center">
           <div className="text-purple-300/50 text-xs font-bold">PF</div>
         </div>
       ) : (
-        <div className="w-full h-full rounded-lg shadow-lg bg-white border border-gray-200 flex flex-col items-center justify-center relative">
+        <div className="w-full h-full rounded-lg shadow-lg bg-white border border-gray-200 flex flex-col items-center justify-center gap-0">
           {card && (
-            <>
-              {/* Top-left rank + suit */}
-              <span
-                className={`absolute top-1 left-1.5 text-[10px] font-bold leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}
-              >
-                {displayRank(card.rank)}
-                {suitSymbols[card.suit] ?? "?"}
-              </span>
-              {/* Center */}
-              <span
-                className={`text-2xl leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}
-              >
-                {suitSymbols[card.suit] ?? "?"}
-              </span>
-              <span
-                className={`text-sm font-bold leading-none ${suitColors[card.suit] ?? "text-gray-800"}`}
-              >
+            <div
+              className={`flex flex-col items-center leading-none ${suitColors[card.suit] ?? "text-gray-900"}`}
+            >
+              <span className={`${rankSizes[size]} font-black leading-none`}>
                 {displayRank(card.rank)}
               </span>
-            </>
+              <span className={`${suitSizes[size]} leading-none -mt-0.5`}>
+                {suitSymbols[card.suit] ?? "?"}
+              </span>
+            </div>
           )}
         </div>
       )}

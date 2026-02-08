@@ -1,8 +1,8 @@
+import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import { useEnsAddress, useEnsAvatar, useEnsName } from "wagmi";
 import { normalize } from "viem/ens";
+import { useEnsAddress } from "wagmi";
 import { mainnet } from "wagmi/chains";
-import { motion, AnimatePresence } from "motion/react";
 
 export function FriendSearch({
   onInvite,
@@ -21,11 +21,15 @@ export function FriendSearch({
 
   return (
     <div className="space-y-3">
-      <label className="text-sm font-semibold text-white/60">
+      <label
+        htmlFor="ens-search"
+        className="text-sm font-semibold text-white/60"
+      >
         Find a fren by ENS
       </label>
       <div className="flex gap-2">
         <input
+          id="ens-search"
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

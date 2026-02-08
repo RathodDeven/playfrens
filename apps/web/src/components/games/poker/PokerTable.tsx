@@ -14,12 +14,12 @@ import { HandHistory } from "./HandHistory";
 import { PlayerSeat } from "./PlayerSeat";
 import { PotDisplay } from "./PotDisplay";
 
-// 4-seat positions: bottom (hero), left, top, right
+// 4-seat positions: bottom (hero), left, top, right — percentage-based
 const seatPositions = [
-  { top: "85%", left: "50%", transform: "translate(-50%, -50%)" }, // 0: bottom center (hero)
-  { top: "50%", left: "5%", transform: "translate(0, -50%)" }, // 1: left center
-  { top: "5%", left: "50%", transform: "translate(-50%, 0)" }, // 2: top center
-  { top: "50%", left: "95%", transform: "translate(-100%, -50%)" }, // 3: right center
+  { top: "82%", left: "50%", transform: "translate(-50%, -50%)" }, // 0: bottom center (hero)
+  { top: "50%", left: "3%", transform: "translate(0, -50%)" }, // 1: left center
+  { top: "8%", left: "50%", transform: "translate(-50%, 0)" }, // 2: top center
+  { top: "50%", left: "97%", transform: "translate(-100%, -50%)" }, // 3: right center
 ];
 
 export function PokerTable({
@@ -40,6 +40,7 @@ export function PokerTable({
   isSigningSession?: boolean;
 }) {
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const autoStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -83,60 +84,48 @@ export function PokerTable({
     onStartHand,
   ]);
 
-  // Show confetti when hero wins
-  useEffect(() => {
-    if (lastHandResult?.winners.some((w) => w.seatIndex === heroSeatIndex)) {
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 3000);
-    }
-  }, [lastHandResult, heroSeatIndex]);
-
   const isHeroTurn =
     gameState.isHandInProgress && gameState.currentPlayerSeat === heroSeatIndex;
 
   const chipUnit = gameState.chipUnit || 1;
 
-  // Only host (seat 0) can start hands — show button only for first hand (no lastHandResult yet)
+  // Compute total pot for result display
+  const totalPot = lastHandResult?.pots?.reduce((s, p) => s + p.amount, 0) ?? 0;
+
+  // Only host (seat 0) can start hands — show button only for first hand
   const canStartHand =
     !gameState.isHandInProgress &&
     gameState.seats.length >= 2 &&
     heroSeatIndex === 0 &&
     !lastHandResult;
 
+  // Single-player guard: if only 1 seat, show waiting message instead of "Next hand starting"
+  const waitingForPlayers =
+    !gameState.isHandInProgress && lastHandResult && gameState.seats.length < 2;
+
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)]">
+    <div className="h-[calc(100vh-56px)] flex flex-col overflow-hidden">
       {/* Table area */}
-      <div className="flex-1 relative flex items-center justify-center p-8">
+      <div className="flex-1 relative flex items-center justify-center p-4">
         {/* Felt table */}
-        <div className="relative w-full max-w-4xl aspect-[16/10] felt rounded-[60px] border-4 border-amber-900/60 shadow-2xl">
+        <div className="relative w-full max-w-5xl aspect-[16/9] felt rounded-[50px] border-[5px] border-amber-800/70 shadow-2xl">
+          {/* Inner border glow */}
+          <div className="absolute inset-[3px] rounded-[46px] border border-amber-700/20 pointer-events-none" />
+
           {/* PlayFrens logo center */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-            <p className="text-white/10 text-3xl font-black">PlayFrens</p>
+            <p className="text-white/[0.06] text-4xl font-black tracking-widest select-none">
+              PlayFrens
+            </p>
           </div>
 
-          {/* Deck visual at center-top — shows during hand */}
-          {gameState.isHandInProgress && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="absolute top-[15%] left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-            >
-              <div className="relative w-14 h-20">
-                {/* Stacked deck cards */}
-                <div className="absolute top-0 left-0 w-full h-full card-back rounded-lg border border-purple-500/30 shadow-md" />
-                <div className="absolute top-[2px] left-[2px] w-full h-full card-back rounded-lg border border-purple-500/20 shadow-sm" />
-                <div className="absolute top-[4px] left-[4px] w-full h-full card-back rounded-lg border border-purple-400/10" />
-              </div>
-            </motion.div>
-          )}
-
           {/* Community Cards */}
-          <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div className="absolute top-[38%] left-1/2 -translate-x-1/2 -translate-y-1/2">
             <CommunityCards cards={gameState.communityCards} />
           </div>
 
-          {/* Pot — below community cards, clear spacing */}
-          <div className="absolute top-[60%] left-1/2 -translate-x-1/2 -translate-y-1/2">
+          {/* Pot — below community cards */}
+          <div className="absolute top-[58%] left-1/2 -translate-x-1/2 -translate-y-1/2">
             <PotDisplay pots={gameState.pots} chipUnit={chipUnit} />
           </div>
 
@@ -147,7 +136,7 @@ export function PokerTable({
               return (
                 <div
                   key={seat.seatIndex}
-                  className="absolute"
+                  className="absolute z-10"
                   style={seatPositions[positionIndex]}
                 >
                   <PlayerSeat
@@ -171,12 +160,12 @@ export function PokerTable({
             <motion.button
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              transition={{ type: "spring", damping: 10 }}
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
+              transition={{ type: "spring", damping: 12 }}
               onClick={onStartHand}
               disabled={isSigningSession}
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-8 py-4 rounded-2xl bg-gradient-to-r from-neon-green to-neon-blue text-black font-black text-xl shadow-lg glow-green disabled:opacity-50 disabled:cursor-not-allowed"
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 px-10 py-4 rounded-2xl bg-gradient-to-r from-neon-green to-neon-blue text-black font-black text-xl shadow-lg glow-green disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSigningSession ? "Signing Session..." : "Deal Cards!"}
             </motion.button>
@@ -189,8 +178,46 @@ export function PokerTable({
                 initial={{ opacity: 0, scale: 0.8, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="absolute top-[50%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 glass rounded-2xl px-8 py-5 text-center shadow-2xl border border-neon-green/30"
+                className="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 rounded-2xl px-8 py-5 text-center shadow-2xl bg-black/70 backdrop-blur-md border border-neon-green/30"
               >
+                {totalPot > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex items-center justify-center gap-1.5 text-amber-400 font-mono text-sm mb-2"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        fill="currentColor"
+                        fillOpacity="0.2"
+                      />
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="6"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        fill="none"
+                      />
+                      <circle cx="12" cy="12" r="2" fill="currentColor" />
+                    </svg>
+                    <span>
+                      Pot: {totalPot} ({formatYusd(totalPot * chipUnit)}{" "}
+                      ytest.usd)
+                    </span>
+                  </motion.div>
+                )}
                 {lastHandResult.winners.map((w, idx) => {
                   const winnerSeat = gameState.seats.find(
                     (s) => s.seatIndex === w.seatIndex,
@@ -214,18 +241,46 @@ export function PokerTable({
                         className="text-neon-green font-black text-xl"
                       >
                         {w.seatIndex === heroSeatIndex
-                          ? "🎉 You won!"
+                          ? "You won!"
                           : `${winnerName} wins!`}
                       </motion.p>
-                      <motion.p
+                      <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.2 }}
-                        className="text-neon-yellow font-mono text-lg font-bold"
+                        className="flex items-center justify-center gap-1.5 text-neon-yellow font-mono text-lg font-bold"
                       >
-                        +{winAmount} chips ({formatYusd(winAmount * chipUnit)}{" "}
-                        ytest.usd)
-                      </motion.p>
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            fill="currentColor"
+                            fillOpacity="0.2"
+                          />
+                          <circle
+                            cx="12"
+                            cy="12"
+                            r="6"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            fill="none"
+                          />
+                          <circle cx="12" cy="12" r="2" fill="currentColor" />
+                        </svg>
+                        <span>+{winAmount}</span>
+                      </motion.div>
+                      <p className="text-white/50 font-mono text-sm">
+                        {formatYusd(winAmount * chipUnit)} ytest.usd
+                      </p>
                       {w.hand && (
                         <p className="text-white/60 text-sm mt-1">{w.hand}</p>
                       )}
@@ -238,7 +293,9 @@ export function PokerTable({
                   transition={{ delay: 1 }}
                   className="text-white/30 text-xs mt-3"
                 >
-                  Next hand starting...
+                  {waitingForPlayers
+                    ? "Waiting for players..."
+                    : "Next hand starting..."}
                 </motion.p>
               </motion.div>
             )}
@@ -246,34 +303,58 @@ export function PokerTable({
 
           {/* Confetti */}
           {showConfetti && <Confetti />}
+
+          {/* Hand History toggle button */}
+          {handHistory.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowHistory(!showHistory)}
+              className="absolute top-3 right-3 z-20 px-3 py-1.5 rounded-lg bg-black/50 backdrop-blur text-xs font-bold text-white/50 hover:text-white/80 transition-colors border border-white/10"
+            >
+              History ({handHistory.length})
+            </button>
+          )}
         </div>
 
-        {/* Hand History sidebar */}
-        <HandHistory entries={handHistory} chipUnit={chipUnit} />
+        {/* Hand History overlay */}
+        <AnimatePresence>
+          {showHistory && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="absolute right-2 top-2 z-30"
+            >
+              <HandHistory
+                entries={handHistory}
+                chipUnit={chipUnit}
+                onClose={() => setShowHistory(false)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Bottom bar */}
-      <div className="px-4 py-3 glass">
-        <div className="flex items-center justify-center max-w-4xl mx-auto">
-          {isHeroTurn ? (
-            <ActionBar
-              legalActions={gameState.legalActions}
-              onAction={onAction}
-              chipUnit={chipUnit}
-            />
-          ) : gameState.isHandInProgress ? (
-            <p className="text-white/40 text-sm">
-              Waiting for{" "}
-              <span className="text-white/60 font-medium">
-                {gameState.seats.find(
-                  (s) => s.seatIndex === gameState.currentPlayerSeat,
-                )?.ensName || "opponent"}
-              </span>
-            </p>
-          ) : !lastHandResult && !canStartHand ? (
-            <p className="text-white/40 text-sm">Waiting for players...</p>
-          ) : null}
-        </div>
+      {/* Bottom action bar — docked */}
+      <div className="h-16 shrink-0 flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm border-t border-white/5">
+        {isHeroTurn ? (
+          <ActionBar
+            legalActions={gameState.legalActions}
+            onAction={onAction}
+            chipUnit={chipUnit}
+          />
+        ) : gameState.isHandInProgress ? (
+          <p className="text-white/40 text-sm">
+            Waiting for{" "}
+            <span className="text-white/60 font-medium">
+              {gameState.seats.find(
+                (s) => s.seatIndex === gameState.currentPlayerSeat,
+              )?.ensName || "opponent"}
+            </span>
+          </p>
+        ) : !lastHandResult && !canStartHand ? (
+          <p className="text-white/40 text-sm">Waiting for players...</p>
+        ) : null}
       </div>
     </div>
   );
@@ -290,7 +371,7 @@ function Confetti() {
   }));
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[60px]">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[50px]">
       {pieces.map((p) => (
         <motion.div
           key={p.id}

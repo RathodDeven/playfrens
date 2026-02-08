@@ -10,8 +10,7 @@ export const config = getDefaultConfig({
   chains: [baseSepolia, mainnet],
   transports: {
     [baseSepolia.id]: http(
-      import.meta.env.VITE_BASE_SEPOLIA_RPC_URL ||
-        "https://sepolia.base.org",
+      import.meta.env.VITE_BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org",
     ),
     [mainnet.id]: http(),
   },

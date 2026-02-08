@@ -297,18 +297,22 @@ export class YellowSessionManager {
       return;
     }
 
+    // Use snapshots when available (taken before finalizePendingLeaves removes players)
+    const chipCounts = room.getChipSnapshot() ?? room.getChipCounts();
+    const seatToAddress = room.getPlayerSnapshot() ?? room.getPlayerAddresses();
+    room.clearSnapshots();
+
     const allParticipants = [...session.participants, this.serverAddress];
     const allocations = computeAllocations(
       allParticipants,
-      room.getChipCounts(),
-      room.getPlayerAddresses(),
+      chipCounts,
+      seatToAddress,
       session.totalDeposit,
       session.chipUnit,
     );
 
     session.lastAllocations = allocations;
 
-    const chipCounts = room.getChipCounts();
     console.log(
       `[Yellow] submitHandAllocations — chipCounts: ${[...chipCounts.entries()].map(([s, c]) => `seat${s}=${c}`).join(", ")}`,
     );
@@ -326,7 +330,7 @@ export class YellowSessionManager {
       );
     } catch (err: any) {
       console.error(`[Yellow] Submit app state failed: ${err.message}`);
-      console.error(`[Yellow] Full error:`, err);
+      console.error("[Yellow] Full error:", err);
     }
   }
 

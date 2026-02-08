@@ -23,6 +23,7 @@ export function useYellow(address?: string) {
     };
   }, [client]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset state when address changes
   useEffect(() => {
     setIsAuthorized(false);
     setBalance("0");

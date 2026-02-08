@@ -24,7 +24,7 @@ export function PotDisplay({
           <ChipIcon />
           <div className="flex flex-col items-center leading-tight">
             <span className="font-bold text-neon-yellow font-mono text-base">
-              {totalPot} chips
+              {totalPot}
             </span>
             <span className="text-white/50 font-mono text-xs">
               {formatYusd(totalPot * chipUnit)} ytest.usd
@@ -53,12 +53,29 @@ function ChipIcon() {
     <svg
       width="16"
       height="16"
-      viewBox="0 0 16 16"
+      viewBox="0 0 24 24"
       fill="none"
-      className="text-neon-yellow"
+      className="text-neon-yellow shrink-0"
+      aria-hidden="true"
     >
-      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="2" />
-      <circle cx="8" cy="8" r="4" fill="currentColor" opacity="0.3" />
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="2"
+        fill="currentColor"
+        fillOpacity="0.2"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        fill="none"
+      />
+      <circle cx="12" cy="12" r="2" fill="currentColor" />
     </svg>
   );
 }

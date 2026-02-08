@@ -1,9 +1,4 @@
-import {
-  createWalletClient,
-  http,
-  type Hex,
-  type WalletClient,
-} from "viem";
+import { http, type Hex, type WalletClient, createWalletClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 

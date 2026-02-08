@@ -306,7 +306,7 @@ export class YellowClient {
       }
 
       if (this.handlers.has(method)) {
-        this.handlers.get(method)!(result);
+        this.handlers.get(method)?.(result);
       }
     }
   }

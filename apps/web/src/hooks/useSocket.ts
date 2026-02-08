@@ -1,9 +1,13 @@
+import { EVENTS } from "@playfrens/shared";
 import { useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
-import { EVENTS } from "@playfrens/shared";
-import { connectSocket, disconnectSocket, getSocket } from "../lib/socket";
+import { connectSocket, getSocket } from "../lib/socket";
 
-export function useSocket(address?: string, ensName?: string, ensAvatar?: string): {
+export function useSocket(
+  address?: string,
+  ensName?: string,
+  ensAvatar?: string,
+): {
   socket: ReturnType<typeof getSocket>;
   isConnected: boolean;
   isRegistered: boolean;

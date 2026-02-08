@@ -26,7 +26,7 @@ export function getSocketIdForAddress(address: string): string | undefined {
 }
 
 export function authMiddleware(
-  socket: Socket,
+  _socket: Socket,
   next: (err?: Error) => void,
 ): void {
   // For now, accept all connections. Auth happens via 'register' event.

@@ -75,6 +75,25 @@ export function setupSocketHandlers(
                   emitToSeatInRoom(io, roomId, seatIndex, EVENTS.PLAYER_LEFT, {
                     seatIndex,
                   });
+                  handleDeferredRemoval(io, roomId, seatIndex);
+                  io.to(roomId).emit(EVENTS.PLAYER_LEFT, { seatIndex });
+                }
+
+                // Broadcast updated state after all removals
+                if (removed.length > 0) {
+                  broadcastGameState(io, roomId, roomManager);
+
+                  // Check if room is now empty — close session + delete
+                  if (room.getPlayerCount() === 0) {
+                    if (yellowSessions.hasSession(roomId)) {
+                      yellowSessions
+                        .closeSession(roomId)
+                        .catch((err) =>
+                          console.error("[Yellow] Close failed:", err),
+                        );
+                    }
+                    roomManager.deleteRoom(roomId);
+                  }
                 }
 
                 console.log(
@@ -194,6 +213,25 @@ export function setupSocketHandlers(
       },
     );
 
+    // Leave on next hand
+    socket.on(EVENTS.LEAVE_NEXT_HAND, (data: { roomId: string }) => {
+      const roomInfo = socketRooms.get(socket.id);
+      if (!roomInfo || roomInfo.roomId !== data.roomId) return;
+
+      const room = roomManager.getRoom(data.roomId);
+      if (!room || room.gameType !== "poker") return;
+
+      const pokerRoom = room as PokerRoom;
+      if (pokerRoom.requestLeaveNextHand(roomInfo.seatIndex)) {
+        socket.emit(EVENTS.LEAVE_NEXT_HAND_ACK, {
+          seatIndex: roomInfo.seatIndex,
+        });
+        console.log(
+          `[Room] Seat ${roomInfo.seatIndex} requested leave-next-hand in ${data.roomId}`,
+        );
+      }
+    });
+
     // Leave room
     socket.on(EVENTS.LEAVE_ROOM, (data: { roomId: string }) => {
       handleLeaveRoom(
@@ -264,7 +302,29 @@ export function setupSocketHandlers(
           console.log(
             `[Yellow] Session already exists for room ${room.roomId} — starting hand`,
           );
-          (room as PokerRoom).startHand();
+
+          // Process leave-next-hand requests before starting
+          const pokerRoom = room as PokerRoom;
+          const leaveNextRemoved = pokerRoom.processLeaveNextHand();
+          for (const seatIdx of leaveNextRemoved) {
+            emitToSeatInRoom(io, data.roomId, seatIdx, EVENTS.PLAYER_LEFT, {
+              seatIndex: seatIdx,
+            });
+            handleDeferredRemoval(io, data.roomId, seatIdx);
+            io.to(data.roomId).emit(EVENTS.PLAYER_LEFT, {
+              seatIndex: seatIdx,
+            });
+          }
+
+          if (pokerRoom.getPlayerCount() < 2) {
+            broadcastGameState(io, data.roomId, roomManager);
+            console.log(
+              `[Game] Not enough players after leave-next-hand in ${data.roomId}`,
+            );
+            return;
+          }
+
+          pokerRoom.startHand();
           autoFoldPendingLeavers(io, data.roomId, roomManager, yellowSessions);
           broadcastGameState(io, data.roomId, roomManager);
           console.log(`[Game] Hand started in ${data.roomId}`);
@@ -294,7 +354,28 @@ export function setupSocketHandlers(
                 );
                 io.to(data.roomId).emit(EVENTS.SESSION_READY, { sessionId });
                 try {
-                  (room as PokerRoom).startHand();
+                  const pr = room as PokerRoom;
+                  const leaveRemoved = pr.processLeaveNextHand();
+                  for (const seatIdx of leaveRemoved) {
+                    emitToSeatInRoom(
+                      io,
+                      data.roomId,
+                      seatIdx,
+                      EVENTS.PLAYER_LEFT,
+                      { seatIndex: seatIdx },
+                    );
+                    handleDeferredRemoval(io, data.roomId, seatIdx);
+                    io.to(data.roomId).emit(EVENTS.PLAYER_LEFT, {
+                      seatIndex: seatIdx,
+                    });
+                  }
+
+                  if (pr.getPlayerCount() < 2) {
+                    broadcastGameState(io, data.roomId, roomManager);
+                    return;
+                  }
+
+                  pr.startHand();
                   autoFoldPendingLeavers(
                     io,
                     data.roomId,

@@ -45,6 +45,8 @@ export class YellowRpcClient {
   private authReject: ((err: Error) => void) | null = null;
   private authTimeout: NodeJS.Timeout | null = null;
   private authParams: AuthParams | null = null;
+  private authPromise: Promise<void> | null = null;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private walletClient: WalletClient,
@@ -59,7 +61,19 @@ export class YellowRpcClient {
     await this.ensureConnected();
     if (this.authenticated) return;
 
-    return new Promise<void>(async (resolve, reject) => {
+    // If already authorizing, reuse the in-flight promise (avoid duplicate wallet popups)
+    if (this.authPromise) return this.authPromise;
+
+    this.authPromise = this._doAuthorize();
+    try {
+      await this.authPromise;
+    } finally {
+      this.authPromise = null;
+    }
+  }
+
+  private async _doAuthorize(): Promise<void> {
+    const promise = new Promise<void>((resolve, reject) => {
       this.authResolve = resolve;
       this.authReject = reject;
 
@@ -73,41 +87,43 @@ export class YellowRpcClient {
           this.authResolve = null;
         }
       }, 15000);
-
-      try {
-        const sessionAccount = privateKeyToAccount(this.sessionPrivateKey);
-        const authParams: AuthParams = {
-          session_key: sessionAccount.address,
-          allowances: DEFAULT_ALLOWANCES,
-          expires_at: BigInt(Math.floor(Date.now() / 1000) + 3600),
-          scope: APP_SCOPE,
-        };
-        this.authParams = authParams;
-
-        const authRequest = await createAuthRequestMessage({
-          address: this.address,
-          application: APP_NAME,
-          ...authParams,
-        });
-
-        console.log("[Yellow] Sending auth_request", {
-          address: this.address,
-          session_key: authParams.session_key,
-          application: APP_NAME,
-          scope: authParams.scope,
-        });
-
-        this.ws?.send(authRequest);
-      } catch (err) {
-        if (this.authTimeout) {
-          clearTimeout(this.authTimeout);
-          this.authTimeout = null;
-        }
-        this.authResolve = null;
-        this.authReject = null;
-        reject(err);
-      }
     });
+
+    try {
+      const sessionAccount = privateKeyToAccount(this.sessionPrivateKey);
+      const authParams: AuthParams = {
+        session_key: sessionAccount.address,
+        allowances: DEFAULT_ALLOWANCES,
+        expires_at: BigInt(Math.floor(Date.now() / 1000) + 3600),
+        scope: APP_SCOPE,
+      };
+      this.authParams = authParams;
+
+      const authRequest = await createAuthRequestMessage({
+        address: this.address,
+        application: APP_NAME,
+        ...authParams,
+      });
+
+      console.log("[Yellow] Sending auth_request", {
+        address: this.address,
+        session_key: authParams.session_key,
+        application: APP_NAME,
+        scope: authParams.scope,
+      });
+
+      this.ws?.send(authRequest);
+    } catch (err) {
+      if (this.authTimeout) {
+        clearTimeout(this.authTimeout);
+        this.authTimeout = null;
+      }
+      this.authResolve = null;
+      this.authReject = null;
+      throw err;
+    }
+
+    return promise;
   }
 
   private rotateSessionKey(): void {
@@ -122,7 +138,7 @@ export class YellowRpcClient {
     try {
       return await this._fetchLedgerBalances();
     } catch (err: any) {
-      // If auth-related error, re-authorize and retry once
+      // If auth-related error, re-authorize with SAME session key (no wallet popup)
       const msg = err?.message?.toLowerCase() ?? "";
       if (
         msg.includes("auth") ||
@@ -130,11 +146,9 @@ export class YellowRpcClient {
         msg.includes("unauthorized")
       ) {
         console.log(
-          "[Yellow] Auth error in getLedgerBalances, re-authorizing...",
+          "[Yellow] Auth error in getLedgerBalances, re-authorizing with same session key...",
         );
         this.authenticated = false;
-        this.rotateSessionKey();
-        this.disconnect();
         await this.authorize();
         return await this._fetchLedgerBalances();
       }
@@ -178,11 +192,28 @@ export class YellowRpcClient {
     await this.authorize();
     console.log("[Yellow] Signing payload locally with session key");
     const signature = await this.sessionSigner(payload as [any, any, any]);
-    console.log("[Yellow] Payload signed:", signature.slice(0, 20) + "...");
+    console.log("[Yellow] Payload signed:", `${signature.slice(0, 20)}...`);
     return signature;
   }
 
+  private startPing(): void {
+    this.stopPing();
+    this.pingInterval = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ ping: Date.now() }));
+      }
+    }, 30_000);
+  }
+
+  private stopPing(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
   disconnect(): void {
+    this.stopPing();
     if (this.authTimeout) {
       clearTimeout(this.authTimeout);
       this.authTimeout = null;
@@ -196,16 +227,28 @@ export class YellowRpcClient {
     this.connectPromise = null;
     this.authResolve = null;
     this.authReject = null;
+    this.authPromise = null;
   }
 
   private async ensureConnected(): Promise<void> {
-    if (this.connectPromise) return this.connectPromise;
+    // If already connected and open, return immediately
+    if (this.ws?.readyState === WebSocket.OPEN) return;
+
+    // If connecting, wait for it
+    if (this.connectPromise && this.ws?.readyState === WebSocket.CONNECTING) {
+      return this.connectPromise;
+    }
+
+    // Clean up stale state
+    this.connectPromise = null;
+    this.stopPing();
 
     this.connectPromise = new Promise((resolve, reject) => {
       this.ws = new WebSocket(WS_URL);
 
       this.ws.onopen = () => {
         console.log("[Yellow] Connected to Clearnode");
+        this.startPing();
         resolve();
       };
       this.ws.onerror = () => {
@@ -216,6 +259,7 @@ export class YellowRpcClient {
         console.log("[Yellow] Disconnected from Clearnode");
         this.authenticated = false;
         this.connectPromise = null;
+        this.stopPing();
       };
       this.ws.onmessage = (event) => {
         this.handleMessage(event.data);
