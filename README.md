@@ -18,12 +18,12 @@ flowchart LR
     end
 
     subgraph OFFCHAIN ["Off-Chain (every hand) ⚡"]
-        P["Play poker\nDeal • Bet • Showdown"]
+        P["Play poker<br/>Deal • Bet • Showdown"]
         S["Cash out"]
     end
 
     D -->|"funds ready"| P
-    P -->|"unlimited hands\n0 gas"| S
+    P -->|"unlimited hands<br/>0 gas"| S
     S -->|"funds returned"| W
 ```
 
@@ -39,13 +39,13 @@ flowchart LR
 ```mermaid
 graph TB
     subgraph BROWSER ["Browser (per player)"]
-        RK["Wallet\n(RainbowKit)"]
-        GS["Game State\n(Socket.io)"]
-        YR["Session Signing\n(Yellow Network)"]
+        RK["Wallet<br/>(RainbowKit)"]
+        GS["Game State<br/>(Socket.io)"]
+        YR["Session Signing<br/>(Yellow Network)"]
     end
 
     subgraph SERVER ["Game Server (Node.js)"]
-        RM["RoomManager\nPokerRoom"]
+        RM["RoomManager<br/>PokerRoom"]
         SM["Session Manager"]
         YC["Yellow Client"]
         RM --> YC
@@ -75,22 +75,22 @@ graph TB
 
 ```mermaid
 flowchart TB
-    WALLET["Player Wallet\n(ytest.usd on Base Sepolia)"]
+    WALLET["Player Wallet<br/>(ytest.usd on Base Sepolia)"]
 
-    WALLET -->|"① Deposit\n(on-chain)"| UB
-    WALLET -.->|"① Faucet\n(testnet shortcut)"| UB
+    WALLET -->|"① Deposit<br/>(on-chain)"| UB
+    WALLET -.->|"① Faucet<br/>(testnet shortcut)"| UB
 
-    UB["Player Balance\n(Yellow Network)"]
+    UB["Player Balance<br/>(Yellow Network)"]
 
-    UB -->|"② Join Game\nbuy-in deducted"| APP
+    UB -->|"② Join Game<br/>buy-in deducted"| APP
 
-    APP["Poker Session\n\nHand 1: A=50, B=30\nHand 2: A=45, B=35\nHand 3: A=60, B=20"]
+    APP["Poker Session<br/><br/>Hand 1: A=50, B=30<br/>Hand 2: A=45, B=35<br/>Hand 3: A=60, B=20"]
 
-    APP -->|"③ Every Hand\ninstant settlement\n0 gas"| APP
+    APP -->|"③ Every Hand<br/>instant settlement<br/>0 gas"| APP
 
-    APP -->|"④ Cash Out\nfunds returned"| UB
+    APP -->|"④ Cash Out<br/>funds returned"| UB
 
-    UB -->|"⑤ Withdraw\n(on-chain)"| WALLET
+    UB -->|"⑤ Withdraw<br/>(on-chain)"| WALLET
 
     style WALLET fill:#1a1a2e,stroke:#e94560,color:#fff
     style UB fill:#16213e,stroke:#0f3460,color:#fff
