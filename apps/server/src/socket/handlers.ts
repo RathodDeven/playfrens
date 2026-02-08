@@ -104,7 +104,7 @@ export function setupSocketHandlers(
                     `[Yellow] Room has ${room.getPlayerCount()} player(s) after removals — closing session for room ${roomId}`,
                   );
                   yellowSessions
-                    .closeSession(roomId, room)
+                    .closeSession(roomId)
                     .catch((err) =>
                       console.error("[Yellow] Close failed:", err),
                     );
@@ -276,7 +276,7 @@ export function setupSocketHandlers(
 
       if (yellowSessions.hasSession(room.roomId)) {
         yellowSessions
-          .closeSession(room.roomId, room)
+          .closeSession(room.roomId)
           .catch((err) => console.error("[Yellow] Close failed:", err));
       }
 
@@ -565,9 +565,12 @@ function handleLeaveRoom(
       console.log(
         `[Yellow] Snapshotting allocations before removing seat ${roomInfo.seatIndex} from room ${roomId}`,
       );
+      // Synchronously capture correct allocations while all players still present
+      yellowSessions.snapshotAllocations(room as PokerRoom);
+      // Also submit to Clearnode (async, fire-and-forget)
       yellowSessions
         .submitHandAllocations(room as PokerRoom)
-        .catch((err) => console.error("[Yellow] Snapshot failed:", err));
+        .catch((err) => console.error("[Yellow] Submit failed:", err));
     }
 
     room.removePlayer(roomInfo.seatIndex);
@@ -590,7 +593,7 @@ function handleLeaveRoom(
         `[Yellow] Room has ${room.getPlayerCount()} player(s) — closing session for room ${roomId}`,
       );
       yellowSessions
-        .closeSession(roomId, room as PokerRoom)
+        .closeSession(roomId)
         .catch((err) => console.error("[Yellow] Close failed:", err));
     }
 

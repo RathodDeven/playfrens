@@ -120,8 +120,7 @@ export class PokerRoom extends GameRoom {
     let actionAmount = betSize;
     if (action === "call" && !actionAmount) {
       try {
-        const legal = this.table.legalActions();
-        actionAmount = legal.chipRange?.min;
+        actionAmount = this.getCallAmount();
       } catch {
         /* ignore */
       }
@@ -480,6 +479,23 @@ export class PokerRoom extends GameRoom {
     };
   }
 
+  private getCallAmount(): number {
+    const tableSeats = this.table.seats();
+    let biggestBet = 0;
+    let currentPlayerBet = 0;
+    const actorIndex = this.table.playerToAct();
+
+    for (let i = 0; i < this.config.maxPlayers; i++) {
+      const seat = tableSeats[i];
+      if (!seat) continue;
+      const bet = (seat as any).betSize ?? 0;
+      if (bet > biggestBet) biggestBet = bet;
+      if (i === actorIndex) currentPlayerBet = bet;
+    }
+
+    return biggestBet - currentPlayerBet;
+  }
+
   private mapLegalActions(legal: any): LegalAction[] {
     const actions: LegalAction[] = [];
     const actionList: string[] = legal.actions ?? [];
@@ -489,7 +505,7 @@ export class PokerRoom extends GameRoom {
       } else if (action === "check") {
         actions.push({ action: "check" });
       } else if (action === "call") {
-        actions.push({ action: "call", minBet: legal.chipRange?.min });
+        actions.push({ action: "call", minBet: this.getCallAmount() });
       } else if (action === "bet") {
         actions.push({
           action: "bet",

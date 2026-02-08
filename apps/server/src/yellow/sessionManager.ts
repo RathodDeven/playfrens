@@ -1,4 +1,4 @@
-import { fromOnChainAmount } from "@playfrens/shared";
+import { fromOnChainAmount, toOnChainAmount } from "@playfrens/shared";
 import type { GameRoom } from "../games/GameRoom.js";
 import type { PokerRoom } from "../games/poker/PokerRoom.js";
 import type {
@@ -286,6 +286,36 @@ export class YellowSessionManager {
   }
 
   /**
+   * Synchronously compute and store allocations in the session.
+   * Call BEFORE removing players to ensure chip data is accurate.
+   */
+  snapshotAllocations(room: PokerRoom): void {
+    const session = this.sessions.get(room.roomId);
+    if (!session) return;
+
+    const chipCounts = room.getChipSnapshot() ?? room.getChipCounts();
+    const seatToAddress = room.getPlayerSnapshot() ?? room.getPlayerAddresses();
+    room.clearSnapshots();
+
+    const allParticipants = [...session.participants, this.serverAddress];
+    const allocations = computeAllocations(
+      allParticipants,
+      chipCounts,
+      seatToAddress,
+      session.totalDeposit,
+      session.chipUnit,
+    );
+
+    session.lastAllocations = allocations;
+    this.logAllocations(
+      "snapshotAllocations",
+      session,
+      chipCounts,
+      allocations,
+    );
+  }
+
+  /**
    * Submit chip allocations to Clearnode after each hand.
    * Server is the trusted judge (weight=100) — only server signature needed.
    */
@@ -313,15 +343,11 @@ export class YellowSessionManager {
     );
 
     session.lastAllocations = allocations;
-
-    console.log(
-      `[Yellow] submitHandAllocations — chipCounts: ${[...chipCounts.entries()].map(([s, c]) => `seat${s}=${c}`).join(", ")}`,
-    );
-    console.log(
-      `[Yellow] Submitting state for session ${session.sessionId}:`,
-      allocations
-        .map((a) => `${a.participant.slice(0, 10)}: ${a.amount}`)
-        .join(", "),
+    this.logAllocations(
+      "submitHandAllocations",
+      session,
+      chipCounts,
+      allocations,
     );
 
     try {
@@ -337,29 +363,41 @@ export class YellowSessionManager {
 
   /**
    * Close the app session with final allocations.
-   * Server is the trusted judge — only server signature needed.
+   * Uses session.lastAllocations — do NOT recompute here because players
+   * may have already been removed from the room. Allocations are kept
+   * current by snapshotAllocations() and submitHandAllocations().
    */
-  async closeSession(roomId: string, room?: PokerRoom): Promise<void> {
+  async closeSession(roomId: string): Promise<void> {
     const session = this.sessions.get(roomId);
     if (!session) return;
 
-    if (room && room.getPlayerCount() > 0) {
-      const allParticipants = [...session.participants, this.serverAddress];
-      session.lastAllocations = computeAllocations(
-        allParticipants,
-        room.getChipCounts(),
-        room.getPlayerAddresses(),
-        session.totalDeposit,
-        session.chipUnit,
+    // Log final allocation details
+    console.log(`[Yellow] ══════ CLOSING SESSION ${session.sessionId} ══════`);
+    console.log(
+      `[Yellow] Total deposit: ${session.totalDeposit} ytest.usd (on-chain: ${toOnChainAmount(session.totalDeposit)})`,
+    );
+
+    let allocationSum = 0;
+    for (const a of session.lastAllocations) {
+      const humanAmount = fromOnChainAmount(a.amount);
+      const isServer =
+        a.participant.toLowerCase() === this.serverAddress.toLowerCase();
+      console.log(
+        `[Yellow]   ${isServer ? "SERVER" : "PLAYER"} ${a.participant.slice(0, 10)}: ${a.amount} raw (${humanAmount} ytest.usd)`,
+      );
+      allocationSum += Number(a.amount);
+    }
+    console.log(
+      `[Yellow]   TOTAL: ${allocationSum} raw (${fromOnChainAmount(String(allocationSum))} ytest.usd)`,
+    );
+    console.log(
+      `[Yellow]   Expected: ${toOnChainAmount(session.totalDeposit)} raw (${session.totalDeposit} ytest.usd)`,
+    );
+    if (String(allocationSum) !== toOnChainAmount(session.totalDeposit)) {
+      console.error(
+        `[Yellow]   ⚠ MISMATCH! Allocation sum ${allocationSum} ≠ expected ${toOnChainAmount(session.totalDeposit)}`,
       );
     }
-
-    console.log(
-      `[Yellow] Closing session ${session.sessionId} with allocations:`,
-      session.lastAllocations
-        .map((a) => `${a.participant.slice(0, 10)}: ${a.amount}`)
-        .join(", "),
-    );
 
     try {
       await this.client.closeAppSession(
@@ -382,6 +420,45 @@ export class YellowSessionManager {
       clearTimeout(pending.timeout);
       this.pendingSessions.delete(roomId);
       console.log(`[Yellow] Cancelled pending session for room ${roomId}`);
+    }
+  }
+
+  /** Log detailed allocation info for debugging fund distribution */
+  private logAllocations(
+    context: string,
+    session: RoomSession,
+    chipCounts: Map<number, number>,
+    allocations: AppSessionAllocation[],
+  ): void {
+    console.log(`[Yellow] ── ${context} (session ${session.sessionId}) ──`);
+    console.log(
+      `[Yellow]   Chips: ${[...chipCounts.entries()].map(([s, c]) => `seat${s}=${c}`).join(", ")} | chipUnit=${session.chipUnit}`,
+    );
+
+    let allocationSum = 0;
+    for (const a of allocations) {
+      const humanAmount = fromOnChainAmount(a.amount);
+      const isServer =
+        a.participant.toLowerCase() === this.serverAddress.toLowerCase();
+      console.log(
+        `[Yellow]   ${isServer ? "SERVER" : "PLAYER"} ${a.participant.slice(0, 10)}: ${a.amount} raw = ${humanAmount} ytest.usd`,
+      );
+      allocationSum += Number(a.amount);
+    }
+
+    const expectedRaw = toOnChainAmount(session.totalDeposit);
+    console.log(
+      `[Yellow]   Sum: ${allocationSum} raw | Expected: ${expectedRaw} raw | Match: ${String(allocationSum) === expectedRaw}`,
+    );
+
+    // Check server allocation is 0
+    const serverAlloc = allocations.find(
+      (a) => a.participant.toLowerCase() === this.serverAddress.toLowerCase(),
+    );
+    if (serverAlloc && serverAlloc.amount !== "0") {
+      console.error(
+        `[Yellow]   ⚠ SERVER HAS NON-ZERO ALLOCATION: ${serverAlloc.amount}`,
+      );
     }
   }
 }
