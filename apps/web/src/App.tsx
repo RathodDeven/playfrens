@@ -3,8 +3,8 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { useAccount, useEnsAvatar, useEnsName } from "wagmi";
-import { sepolia } from "wagmi/chains";
+import { useAccount, useEnsAvatar, useEnsName, useSwitchChain } from "wagmi";
+import { baseSepolia, sepolia } from "wagmi/chains";
 import { PokerTable } from "./components/games/poker/PokerTable";
 import { Header } from "./components/layout/Header";
 import { Lobby } from "./components/lobby/Lobby";
@@ -17,7 +17,9 @@ import { useYellow } from "./hooks/useYellow";
 import { type TransactionEntry, getStore } from "./lib/transactions";
 
 export function App() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
+  const { switchChain } = useSwitchChain();
+  const isWrongNetwork = isConnected && chainId !== baseSepolia.id;
   const { data: ensName } = useEnsName({
     address,
     chainId: sepolia.id,
@@ -179,6 +181,50 @@ export function App() {
           transition={{ delay: 0.2 }}
         >
           <ConnectButton />
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Wrong network
+  if (isWrongNetwork) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-6 p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center space-y-4 max-w-md"
+        >
+          <h1 className="text-4xl font-black bg-gradient-to-r from-neon-green via-neon-blue to-neon-pink bg-clip-text text-transparent">
+            PlayFrens
+          </h1>
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+            <p className="text-amber-400 text-lg font-semibold">
+              Wrong Network
+            </p>
+            <p className="text-white/50 text-sm mt-2">
+              PlayFrens runs on <span className="text-white font-medium">Base Sepolia</span> testnet. Please switch your wallet to continue.
+            </p>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => switchChain({ chainId: baseSepolia.id })}
+            className="px-6 py-3 rounded-xl bg-neon-blue/20 text-neon-blue font-bold hover:bg-neon-blue/30 transition-colors w-full"
+          >
+            Switch to Base Sepolia
+          </motion.button>
+          <p className="text-white/30 text-xs">
+            Don't have Base Sepolia in your wallet?{" "}
+            <a
+              href="https://chainlist.org/chain/84532"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-neon-blue hover:underline"
+            >
+              Add it from ChainList
+            </a>
+          </p>
         </motion.div>
       </div>
     );
