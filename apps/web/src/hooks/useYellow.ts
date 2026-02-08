@@ -91,7 +91,7 @@ export function useYellow(address?: string) {
         balances.find((b) => b.asset === "usdc");
       setBalance(String(fromOnChainAmount(match?.amount ?? "0")));
     } catch (err) {
-      console.error("Failed to fetch Yellow balance:", err);
+      console.error("Failed to fetch Unified balance:", err);
     } finally {
       setIsLoading(false);
     }

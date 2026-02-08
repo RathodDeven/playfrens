@@ -1,7 +1,7 @@
 import { CustodyAbi, Erc20Abi } from "@erc7824/nitrolite";
 import { CONTRACTS } from "@playfrens/shared";
-import { useCallback, useState } from "react";
-import { type Address, parseUnits } from "viem";
+import { useCallback, useEffect, useState } from "react";
+import { type Address, formatUnits, parseUnits } from "viem";
 import { baseSepolia } from "viem/chains";
 import { usePublicClient, useWalletClient } from "wagmi";
 
@@ -14,6 +14,28 @@ export function useCustody(address?: Address) {
   const publicClient = usePublicClient({ chainId: baseSepolia.id });
   const [isDepositing, setIsDepositing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [custodyBalance, setCustodyBalance] = useState("0");
+
+  const fetchCustodyBalance = useCallback(async () => {
+    if (!publicClient || !address) return;
+    try {
+      const result = await publicClient.readContract({
+        address: CUSTODY_ADDRESS,
+        abi: CustodyAbi,
+        functionName: "getAccountsBalances",
+        args: [[address], [TOKEN_ADDRESS]],
+      });
+      // result is bigint[][] — result[0][0] for single user/token
+      const raw = (result as bigint[][])[0][0];
+      setCustodyBalance(formatUnits(raw, TOKEN_DECIMALS));
+    } catch {
+      setCustodyBalance("0");
+    }
+  }, [publicClient, address]);
+
+  useEffect(() => {
+    fetchCustodyBalance();
+  }, [fetchCustodyBalance]);
 
   const deposit = useCallback(
     async (amount: string) => {
@@ -56,11 +78,12 @@ export function useCustody(address?: Address) {
           account: address,
         });
         await publicClient.waitForTransactionReceipt({ hash: depositTx });
+        await fetchCustodyBalance();
       } finally {
         setIsDepositing(false);
       }
     },
-    [walletClient, publicClient, address],
+    [walletClient, publicClient, address, fetchCustodyBalance],
   );
 
   const withdraw = useCallback(
@@ -82,11 +105,12 @@ export function useCustody(address?: Address) {
           account: address,
         });
         await publicClient.waitForTransactionReceipt({ hash: withdrawTx });
+        await fetchCustodyBalance();
       } finally {
         setIsWithdrawing(false);
       }
     },
-    [walletClient, publicClient, address],
+    [walletClient, publicClient, address, fetchCustodyBalance],
   );
 
   return {
@@ -94,5 +118,7 @@ export function useCustody(address?: Address) {
     withdraw,
     isDepositing,
     isWithdrawing,
+    custodyBalance,
+    refetchCustodyBalance: fetchCustodyBalance,
   };
 }

@@ -266,6 +266,7 @@ export function Lobby({
   onDeposit,
   onCustodyDeposit,
   onCustodyWithdraw,
+  custodyBalance,
   isCustodyDepositing,
   isCustodyWithdrawing,
   transactions,
@@ -287,6 +288,7 @@ export function Lobby({
   onDeposit: () => Promise<void>;
   onCustodyDeposit: (amount: string) => Promise<void>;
   onCustodyWithdraw: (amount: string) => Promise<void>;
+  custodyBalance?: string;
   isCustodyDepositing: boolean;
   isCustodyWithdrawing: boolean;
   transactions?: TransactionEntry[];
@@ -330,22 +332,12 @@ export function Lobby({
           transition={{ type: "spring", damping: 20 }}
           className="glass rounded-xl px-5 py-3 flex items-center justify-between"
         >
-          <div className="flex items-center gap-6">
-            <div>
-              <p className="text-xs text-white/50">Yellow Balance</p>
-              <p className="text-xl font-bold font-mono text-neon-green">
-                {formatYusd(Number(balance))}{" "}
-                <span className="text-xs text-white/40">ytest.usd</span>
-              </p>
-            </div>
-            <div className="h-8 w-px bg-white/10" />
-            <div>
-              <p className="text-xs text-white/50">Wallet Balance</p>
-              <p className="text-base font-bold font-mono text-white/80">
-                {formatYusd(Number(walletBalance))}{" "}
-                <span className="text-xs text-white/40">ytest.usd</span>
-              </p>
-            </div>
+          <div>
+            <p className="text-xs text-white/50">Balance</p>
+            <p className="text-xl font-bold font-mono text-neon-green">
+              {formatYusd(Number(balance))}{" "}
+              <span className="text-xs text-white/40">ytest.usd</span>
+            </p>
           </div>
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -640,6 +632,7 @@ export function Lobby({
         onDeposit={onDeposit}
         onCustodyDeposit={onCustodyDeposit}
         onCustodyWithdraw={onCustodyWithdraw}
+        custodyBalance={custodyBalance}
         isCustodyDepositing={isCustodyDepositing}
         isCustodyWithdrawing={isCustodyWithdrawing}
       />

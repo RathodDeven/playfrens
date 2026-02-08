@@ -10,6 +10,7 @@ export function DepositModal({
   onDeposit,
   onCustodyDeposit,
   onCustodyWithdraw,
+  custodyBalance,
   isCustodyDepositing,
   isCustodyWithdrawing,
 }: {
@@ -20,6 +21,7 @@ export function DepositModal({
   onDeposit: () => Promise<void>;
   onCustodyDeposit: (amount: string) => Promise<void>;
   onCustodyWithdraw: (amount: string) => Promise<void>;
+  custodyBalance?: string;
   isCustodyDepositing: boolean;
   isCustodyWithdrawing: boolean;
 }) {
@@ -28,6 +30,8 @@ export function DepositModal({
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"faucet" | "deposit" | "withdraw">("faucet");
+
+  const custodyNum = Number(custodyBalance ?? "0");
 
   const handleFaucet = async () => {
     setIsDepositing(true);
@@ -62,6 +66,12 @@ export function DepositModal({
       setError("Enter a valid amount");
       return;
     }
+    if (Number(withdrawAmount) > custodyNum) {
+      setError(
+        `Insufficient Custody balance. Available: ${formatYusd(custodyNum)} ytest.usd`,
+      );
+      return;
+    }
     setError(null);
     try {
       await onCustodyWithdraw(withdrawAmount);
@@ -79,7 +89,7 @@ export function DepositModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
           onClick={onClose}
         >
           <motion.div
@@ -87,25 +97,17 @@ export function DepositModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: "spring", damping: 25 }}
-            className="glass rounded-2xl p-8 max-w-md w-full mx-4 space-y-6"
+            className="rounded-2xl p-8 max-w-md w-full mx-4 space-y-6 bg-[#12121f] border border-white/10 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-2xl font-bold text-white">Manage Funds</h2>
 
             {/* Balance display */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center px-4 py-3 rounded-xl bg-surface-light">
-                <span className="text-white/60">Yellow Balance</span>
-                <span className="font-mono text-neon-green font-bold">
-                  {formatYusd(Number(balance))} ytest.usd
-                </span>
-              </div>
-              <div className="flex justify-between items-center px-4 py-3 rounded-xl bg-surface-light">
-                <span className="text-white/60">Wallet Balance</span>
-                <span className="font-mono text-white/80 font-bold">
-                  {formatYusd(Number(walletBalance))} ytest.usd
-                </span>
-              </div>
+            <div className="flex justify-between items-center px-4 py-3 rounded-xl bg-surface-light">
+              <span className="text-white/60">Balance</span>
+              <span className="font-mono text-neon-green font-bold">
+                {formatYusd(Number(balance))} ytest.usd
+              </span>
             </div>
 
             {/* Tabs */}
@@ -155,9 +157,9 @@ export function DepositModal({
             {tab === "deposit" && (
               <div className="space-y-4">
                 <p className="text-sm text-white/50">
-                  Deposit ytest.usd from your wallet into the Yellow Network
-                  Custody contract. This locks tokens on-chain for state channel
-                  usage.
+                  Deposit ytest.usd from your wallet into the Custody contract
+                  (on-chain). Deposited funds can be withdrawn back to your
+                  wallet anytime.
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -194,10 +196,16 @@ export function DepositModal({
             {tab === "withdraw" && (
               <div className="space-y-4">
                 <p className="text-sm text-white/50">
-                  Withdraw ytest.usd from the Custody contract back to your
-                  wallet. Only available balance (not locked in channels) can be
-                  withdrawn.
+                  Withdraw from the Custody contract (on-chain) back to your
+                  wallet. Only funds deposited on-chain can be withdrawn —
+                  faucet funds are off-chain only.
                 </p>
+                <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-white/5 text-sm">
+                  <span className="text-white/50">Withdrawable</span>
+                  <span className="font-mono text-neon-blue font-bold">
+                    {formatYusd(custodyNum)} ytest.usd
+                  </span>
+                </div>
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -208,12 +216,21 @@ export function DepositModal({
                     min="0"
                     className="flex-1 px-4 py-3 rounded-xl bg-surface-light border border-white/10 text-white placeholder-white/30 font-mono focus:outline-none focus:border-neon-green"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setWithdrawAmount(String(custodyNum))}
+                    className="px-3 py-3 rounded-xl bg-white/10 text-white/60 text-sm hover:bg-white/20 transition-colors"
+                  >
+                    Max
+                  </button>
                 </div>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleWithdraw}
-                  disabled={isCustodyWithdrawing || !withdrawAmount}
+                  disabled={
+                    isCustodyWithdrawing || !withdrawAmount || custodyNum <= 0
+                  }
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-neon-pink/80 to-neon-purple/80 text-white font-bold hover:from-neon-pink hover:to-neon-purple transition-all disabled:opacity-50"
                 >
                   {isCustodyWithdrawing

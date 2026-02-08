@@ -94,6 +94,8 @@ export function App() {
     withdraw: custodyWithdraw,
     isDepositing: isCustodyDepositing,
     isWithdrawing: isCustodyWithdrawing,
+    custodyBalance,
+    refetchCustodyBalance,
   } = useCustody(address);
 
   // Refresh balances when player leaves a room
@@ -284,6 +286,7 @@ export function App() {
             await custodyDeposit(amount);
             await refetchWallet();
             await refetchBalance();
+            await refetchCustodyBalance();
             recordTransaction({
               type: "deposit",
               amount: Number(amount),
@@ -295,6 +298,7 @@ export function App() {
             await custodyWithdraw(amount);
             await refetchWallet();
             await refetchBalance();
+            await refetchCustodyBalance();
             recordTransaction({
               type: "withdraw",
               amount: Number(amount),
@@ -302,6 +306,7 @@ export function App() {
               details: "Custody withdrawal",
             });
           }}
+          custodyBalance={custodyBalance}
           isCustodyDepositing={isCustodyDepositing}
           isCustodyWithdrawing={isCustodyWithdrawing}
           transactions={transactions}
