@@ -124,6 +124,7 @@ export function setupSocketHandlers(
 
                 if (room.getPlayerCount() === 0) {
                   roomManager.deleteRoom(roomId);
+                  broadcastPublicRooms(io, roomManager);
                 }
               }
             },
@@ -158,6 +159,9 @@ export function setupSocketHandlers(
           console.log(
             `[Room] Created: ${room.roomId} (${data.gameType}) — ${address} joined at seat ${seatIndex}`,
           );
+
+          // Broadcast updated public room list to all clients
+          broadcastPublicRooms(io, roomManager);
         } catch (err: any) {
           socket.emit(EVENTS.ERROR, { message: err.message });
         }
@@ -241,6 +245,8 @@ export function setupSocketHandlers(
           console.log(
             `[Room] ${address} joined ${data.roomId} at seat ${assignedSeat}`,
           );
+
+          broadcastPublicRooms(io, roomManager);
         } catch (err: any) {
           socket.emit(EVENTS.ERROR, { message: err.message });
         }
@@ -373,6 +379,7 @@ export function setupSocketHandlers(
           pokerRoom.startHand();
           autoFoldPendingLeavers(io, data.roomId, roomManager, yellowSessions);
           broadcastGameState(io, data.roomId, roomManager);
+          broadcastPublicRooms(io, roomManager);
           console.log(`[Game] Hand started in ${data.roomId}`);
           return;
         }
@@ -443,6 +450,7 @@ export function setupSocketHandlers(
                     yellowSessions,
                   );
                   broadcastGameState(io, data.roomId, roomManager);
+                  broadcastPublicRooms(io, roomManager);
                   console.log(`[Game] Hand started in ${data.roomId}`);
                 } catch (err: any) {
                   console.error(`[Game] Failed to start hand: ${err.message}`);
@@ -532,9 +540,11 @@ export function setupSocketHandlers(
       },
     );
 
-    // Room list
+    // Room list (on-demand request)
     socket.on(EVENTS.ROOM_LIST, () => {
-      const rooms = roomManager.listRooms();
+      const rooms = roomManager
+        .listRooms()
+        .filter((r) => r.status === "waiting" && !r.config.allowedPlayers);
       socket.emit(EVENTS.ROOM_LIST, rooms);
     });
 
@@ -652,6 +662,8 @@ function handleLeaveRoom(
       roomManager.deleteRoom(roomId);
       console.log(`[Room] Deleted empty room: ${roomId}`);
     }
+
+    broadcastPublicRooms(io, roomManager);
   }
 
   socket.leave(roomId);
@@ -728,6 +740,13 @@ function autoFoldPendingLeavers(
       .submitHandAllocations(pokerRoom)
       .catch((err) => console.error("[Yellow] Submit failed:", err));
   }
+}
+
+function broadcastPublicRooms(io: Server, roomManager: RoomManager): void {
+  const rooms = roomManager
+    .listRooms()
+    .filter((r) => r.status === "waiting" && !r.config.allowedPlayers);
+  io.emit(EVENTS.ROOM_LIST, rooms);
 }
 
 function broadcastGameState(

@@ -9,6 +9,7 @@ import { Header } from "./components/layout/Header";
 import { Lobby } from "./components/lobby/Lobby";
 import { useCustody } from "./hooks/useCustody";
 import { useGameState } from "./hooks/useGameState";
+import { usePublicRooms } from "./hooks/usePublicRooms";
 import { useSocket } from "./hooks/useSocket";
 import { useWalletBalance } from "./hooks/useWalletBalance";
 import { useYellow } from "./hooks/useYellow";
@@ -30,6 +31,8 @@ export function App() {
     ensName ?? undefined,
     ensAvatar ?? undefined,
   );
+
+  const publicRooms = usePublicRooms(socket);
 
   const {
     client,
@@ -289,6 +292,7 @@ export function App() {
           transactions={transactions}
           onClearTransactions={clearTransactions}
           inviteCode={inviteCode ?? undefined}
+          publicRooms={publicRooms}
         />
       )}
     </div>

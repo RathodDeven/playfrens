@@ -1,9 +1,13 @@
-import { CHIP_UNITS, GAME_DEFAULTS } from "@playfrens/shared";
+import { CHIP_UNITS, GAME_DEFAULTS, type RoomInfo } from "@playfrens/shared";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { normalize } from "viem/ens";
 import { useEnsAddress, useEnsAvatar, useEnsName } from "wagmi";
 import { sepolia } from "wagmi/chains";
+import { formatYusd } from "../../lib/format";
+import type { TransactionEntry } from "../../lib/transactions";
+import { DepositModal } from "./DepositModal";
+import { TransactionHistory } from "./TransactionHistory";
 
 function tryNormalize(name: string): string | undefined {
   try {
@@ -12,11 +16,6 @@ function tryNormalize(name: string): string | undefined {
     return undefined;
   }
 }
-import { formatYusd } from "../../lib/format";
-import type { TransactionEntry } from "../../lib/transactions";
-import { DepositModal } from "./DepositModal";
-import { FriendSearch } from "./FriendSearch";
-import { TransactionHistory } from "./TransactionHistory";
 
 interface InvitedPlayer {
   address: string;
@@ -35,25 +34,21 @@ function InviteInput({
   const isEnsName = query.includes(".");
   const isRawAddress = /^0x[a-fA-F0-9]{40}$/i.test(query);
 
-  // Safely normalize ENS name (returns undefined for partial/invalid input)
   const normalizedQuery = useMemo(
     () => (isEnsName ? tryNormalize(query) : undefined),
     [isEnsName, query],
   );
 
-  // Forward resolution: ENS name → address
   const { data: resolvedAddress, isLoading: isLoadingAddress } = useEnsAddress({
     name: normalizedQuery,
     chainId: sepolia.id,
   });
 
-  // Reverse resolution: address → ENS name
   const { data: reverseName } = useEnsName({
     address: isRawAddress ? (query as `0x${string}`) : undefined,
     chainId: sepolia.id,
   });
 
-  // Avatar from ENS name (either typed or reverse-resolved)
   const ensNameForAvatar = isEnsName ? query : reverseName;
   const normalizedAvatar = useMemo(
     () => (ensNameForAvatar ? tryNormalize(ensNameForAvatar) : undefined),
@@ -178,6 +173,91 @@ function InviteInput({
   );
 }
 
+function RoomCard({ room, onJoin }: { room: RoomInfo; onJoin: () => void }) {
+  const creator = room.players[0];
+  const displayName = creator
+    ? creator.ensName ||
+      `${creator.address.slice(0, 6)}...${creator.address.slice(-4)}`
+    : "Unknown";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="glass rounded-xl p-4 flex items-center gap-4"
+    >
+      {/* Creator avatar */}
+      <div className="shrink-0">
+        {creator?.ensAvatar ? (
+          <img
+            src={creator.ensAvatar}
+            alt={displayName}
+            className="w-10 h-10 rounded-full border border-white/20"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-neon-purple to-neon-pink flex items-center justify-center text-sm font-bold border border-white/10">
+            {displayName.slice(0, 2).toUpperCase()}
+          </div>
+        )}
+      </div>
+
+      {/* Room info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-white truncate">
+            {displayName}
+          </p>
+          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-neon-purple/20 text-neon-purple uppercase">
+            {room.gameType}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 mt-1 text-xs text-white/50">
+          <span>
+            Buy-in:{" "}
+            <span className="text-neon-green font-mono">
+              {room.config.buyIn}
+            </span>{" "}
+            chips
+            <span className="text-white/30 ml-1">
+              ({formatYusd(room.config.buyIn * room.config.chipUnit)})
+            </span>
+          </span>
+          <span className="text-white/20">|</span>
+          <span>
+            Blinds: {room.config.smallBlind}/{room.config.bigBlind}
+          </span>
+        </div>
+      </div>
+
+      {/* Players + Join */}
+      <div className="shrink-0 flex items-center gap-3">
+        <div className="flex items-center gap-1">
+          {Array.from({ length: room.config.maxPlayers }, (_, i) => (
+            <div
+              key={`seat-${room.roomId}-${i}`}
+              className={`w-2.5 h-2.5 rounded-full ${
+                i < room.players.length ? "bg-neon-green" : "bg-white/10"
+              }`}
+            />
+          ))}
+          <span className="text-xs text-white/40 ml-1">
+            {room.players.length}/{room.config.maxPlayers}
+          </span>
+        </div>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onJoin}
+          className="px-4 py-1.5 rounded-lg bg-neon-green/20 text-neon-green text-sm font-bold hover:bg-neon-green/30 transition-colors"
+        >
+          Join
+        </motion.button>
+      </div>
+    </motion.div>
+  );
+}
+
 export function Lobby({
   onCreateRoom,
   onJoinRoom,
@@ -191,6 +271,7 @@ export function Lobby({
   transactions,
   onClearTransactions,
   inviteCode,
+  publicRooms,
 }: {
   onCreateRoom: (config: {
     buyIn: number;
@@ -211,6 +292,7 @@ export function Lobby({
   transactions?: TransactionEntry[];
   onClearTransactions?: () => void;
   inviteCode?: string;
+  publicRooms?: RoomInfo[];
 }) {
   const [joinCode, setJoinCode] = useState("");
   const [showDeposit, setShowDeposit] = useState(false);
@@ -236,18 +318,17 @@ export function Lobby({
     }
   }, [inviteCode]);
 
+  const rooms = publicRooms ?? [];
+
   return (
-    <div className="h-[calc(100vh-56px)] flex flex-col items-center justify-center p-4 overflow-hidden">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "spring", damping: 20 }}
-        className="w-full max-w-4xl space-y-4"
-      >
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-4xl mx-auto p-4 space-y-4">
         {/* Balance bar */}
         <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", damping: 20 }}
           className="glass rounded-xl px-5 py-3 flex items-center justify-between"
-          whileHover={{ scale: 1.005 }}
         >
           <div className="flex items-center gap-6">
             <div>
@@ -276,8 +357,49 @@ export function Lobby({
           </motion.button>
         </motion.div>
 
-        {/* Two-column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Open Tables */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", damping: 20, delay: 0.05 }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-base font-bold text-white">Open Tables</h2>
+            {rooms.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-neon-green/20 text-neon-green text-xs font-bold">
+                {rooms.length}
+              </span>
+            )}
+          </div>
+
+          {rooms.length === 0 ? (
+            <div className="glass rounded-xl px-5 py-8 text-center">
+              <p className="text-white/30 text-sm">
+                No open tables — create one below!
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <AnimatePresence mode="popLayout">
+                {rooms.map((room) => (
+                  <RoomCard
+                    key={room.roomId}
+                    room={room}
+                    onJoin={() => onJoinRoom(room.roomId, -1)}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Two-column layout: Create + Join by Code */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", damping: 20, delay: 0.1 }}
+          className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+        >
           {/* Left column: Create Table */}
           <div className="glass rounded-xl p-5 space-y-3">
             <h2 className="text-base font-bold text-white">Create a Table</h2>
@@ -458,56 +580,48 @@ export function Lobby({
             </motion.button>
           </div>
 
-          {/* Right column: Join + Friend Search */}
-          <div className="space-y-4">
-            {/* Join Room */}
-            <div className="glass rounded-xl p-5 space-y-3">
-              <h2 className="text-base font-bold text-white">Join a Table</h2>
-              {inviteCode && joinCode === inviteCode.toUpperCase() && (
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="px-3 py-1.5 rounded-lg bg-neon-blue/10 border border-neon-blue/20 text-sm text-neon-blue"
-                >
-                  You've been invited to room{" "}
-                  <span className="font-mono font-bold">{joinCode}</span>!
-                </motion.div>
-              )}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  placeholder="Enter room code"
-                  maxLength={6}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-surface-light border border-white/10 text-white placeholder-white/30 font-mono text-lg tracking-wider text-center focus:outline-none focus:border-neon-blue"
-                />
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    if (joinCode.length === 6) {
-                      onJoinRoom(joinCode, -1);
-                    }
-                  }}
-                  disabled={joinCode.length !== 6}
-                  className="px-6 py-2.5 rounded-xl bg-neon-blue/20 text-neon-blue font-bold hover:bg-neon-blue/30 transition-colors disabled:opacity-30"
-                >
-                  Join
-                </motion.button>
-              </div>
-            </div>
-
-            {/* Friend Search */}
-            <div className="glass rounded-xl p-5">
-              <FriendSearch
-                onInvite={(address, ensName) => {
-                  console.log("Invite:", address, ensName);
-                }}
+          {/* Right column: Join by Code */}
+          <div className="glass rounded-xl p-5 space-y-3">
+            <h2 className="text-base font-bold text-white">Join by Code</h2>
+            {inviteCode && joinCode === inviteCode.toUpperCase() && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="px-3 py-1.5 rounded-lg bg-neon-blue/10 border border-neon-blue/20 text-sm text-neon-blue"
+              >
+                You've been invited to room{" "}
+                <span className="font-mono font-bold">{joinCode}</span>!
+              </motion.div>
+            )}
+            <p className="text-xs text-white/40">
+              Have a room code? Enter it below to join a private or specific
+              table.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                placeholder="Enter room code"
+                maxLength={6}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-surface-light border border-white/10 text-white placeholder-white/30 font-mono text-lg tracking-wider text-center focus:outline-none focus:border-neon-blue"
               />
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  if (joinCode.length === 6) {
+                    onJoinRoom(joinCode, -1);
+                  }
+                }}
+                disabled={joinCode.length !== 6}
+                className="px-6 py-2.5 rounded-xl bg-neon-blue/20 text-neon-blue font-bold hover:bg-neon-blue/30 transition-colors disabled:opacity-30"
+              >
+                Join
+              </motion.button>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Transaction History — spans full width */}
         {transactions && transactions.length > 0 && onClearTransactions && (
@@ -516,7 +630,7 @@ export function Lobby({
             onClear={onClearTransactions}
           />
         )}
-      </motion.div>
+      </div>
 
       <DepositModal
         isOpen={showDeposit}

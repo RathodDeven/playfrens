@@ -44,15 +44,15 @@ export class RoomManager {
     for (const room of this.rooms.values()) {
       if (gameType && room.gameType !== gameType) continue;
 
-      const players = [];
-      for (const [seat, address] of room.getPlayerAddresses()) {
-        players.push({
-          address,
-          seatIndex: seat,
-          chipCount: 0,
-          isConnected: true,
-        });
-      }
+      const details = room.getPlayerDetails();
+      const players = details.map((p) => ({
+        address: p.address,
+        ensName: p.ensName,
+        ensAvatar: p.ensAvatar,
+        seatIndex: p.seatIndex,
+        chipCount: 0,
+        isConnected: true,
+      }));
 
       rooms.push({
         roomId: room.roomId,

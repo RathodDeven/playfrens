@@ -656,6 +656,20 @@ export class PokerRoom extends GameRoom {
     return addresses;
   }
 
+  getPlayerDetails(): Array<{
+    address: string;
+    ensName?: string;
+    ensAvatar?: string;
+    seatIndex: number;
+  }> {
+    return Array.from(this.players.values()).map((p) => ({
+      address: p.address,
+      ensName: p.ensName,
+      ensAvatar: p.ensAvatar,
+      seatIndex: p.seatIndex,
+    }));
+  }
+
   getPlayerBySeat(seatIndex: number): SeatedPlayer | undefined {
     return this.players.get(seatIndex);
   }

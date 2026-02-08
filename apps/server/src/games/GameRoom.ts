@@ -32,4 +32,10 @@ export abstract class GameRoom {
   abstract getPlayerState(seatIndex: number): unknown;
   abstract getPlayerCount(): number;
   abstract getPlayerAddresses(): Map<number, string>;
+  abstract getPlayerDetails(): Array<{
+    address: string;
+    ensName?: string;
+    ensAvatar?: string;
+    seatIndex: number;
+  }>;
 }
