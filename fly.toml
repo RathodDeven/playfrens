@@ -1,0 +1,28 @@
+# fly.toml app configuration file generated for playfrens-server on 2026-02-08T16:23:34+05:30
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'playfrens-server'
+primary_region = 'bom'
+
+[build]
+
+[env]
+  CLEARNODE_APPLICATION = 'PlayFrens'
+  CLEARNODE_SCOPE = 'playfrens.app'
+  CLEARNODE_WS_URL = 'wss://clearnet-sandbox.yellow.com/ws'
+  NODE_ENV = 'production'
+  PORT = '3001'
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = '512mb'
+  cpus = 1
+  memory_mb = 512
