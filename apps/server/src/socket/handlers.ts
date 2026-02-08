@@ -3,7 +3,11 @@ import type { Server, Socket } from "socket.io";
 import type { PokerRoom } from "../games/poker/PokerRoom.js";
 import type { RoomManager } from "../rooms/RoomManager.js";
 import type { YellowSessionManager } from "../yellow/sessionManager.js";
-import { registerSocket, unregisterSocket } from "./middleware.js";
+import {
+  getSocketIdForAddress,
+  registerSocket,
+  unregisterSocket,
+} from "./middleware.js";
 
 // Track which socket is in which room, and which seat
 const socketRooms = new Map<string, { roomId: string; seatIndex: number }>();
@@ -115,11 +119,7 @@ export function setupSocketHandlers(
                   console.log(
                     `[Yellow] Room has ${room.getPlayerCount()} player(s) after removals — closing session for room ${roomId}`,
                   );
-                  yellowSessions
-                    .closeSession(roomId)
-                    .catch((err) =>
-                      console.error("[Yellow] Close failed:", err),
-                    );
+                  closeSessionAndNotify(io, yellowSessions, roomId);
                 }
 
                 if (room.getPlayerCount() === 0) {
@@ -306,9 +306,7 @@ export function setupSocketHandlers(
       }
 
       if (yellowSessions.hasSession(room.roomId)) {
-        yellowSessions
-          .closeSession(room.roomId)
-          .catch((err) => console.error("[Yellow] Close failed:", err));
+        closeSessionAndNotify(io, yellowSessions, room.roomId);
       }
 
       socket.emit(EVENTS.CASHED_OUT, { roomId: data.roomId });
@@ -366,9 +364,7 @@ export function setupSocketHandlers(
               console.log(
                 `[Yellow] Closing session after leave-next-hand for room ${data.roomId}`,
               );
-              yellowSessions
-                .closeSession(data.roomId)
-                .catch((err) => console.error("[Yellow] Close failed:", err));
+              closeSessionAndNotify(io, yellowSessions, data.roomId);
             }
             if (pokerRoom.getPlayerCount() === 0) {
               roomManager.deleteRoom(data.roomId);
@@ -430,11 +426,7 @@ export function setupSocketHandlers(
                       console.log(
                         `[Yellow] Closing session after leave-next-hand (onReady) for room ${data.roomId}`,
                       );
-                      yellowSessions
-                        .closeSession(data.roomId)
-                        .catch((err) =>
-                          console.error("[Yellow] Close failed:", err),
-                        );
+                      closeSessionAndNotify(io, yellowSessions, data.roomId);
                     }
                     if (pr.getPlayerCount() === 0) {
                       roomManager.deleteRoom(data.roomId);
@@ -653,9 +645,7 @@ function handleLeaveRoom(
       console.log(
         `[Yellow] Room has ${room.getPlayerCount()} player(s) — closing session for room ${roomId}`,
       );
-      yellowSessions
-        .closeSession(roomId)
-        .catch((err) => console.error("[Yellow] Close failed:", err));
+      closeSessionAndNotify(io, yellowSessions, roomId);
     }
 
     if (room.getPlayerCount() === 0) {
@@ -740,6 +730,37 @@ function autoFoldPendingLeavers(
       .submitHandAllocations(pokerRoom)
       .catch((err) => console.error("[Yellow] Submit failed:", err));
   }
+}
+
+/**
+ * Close a Yellow session and notify ALL original participants (including those
+ * who already left the room) so their clients can refresh balances.
+ */
+function closeSessionAndNotify(
+  io: Server,
+  yellowSessions: YellowSessionManager,
+  roomId: string,
+): void {
+  const session = yellowSessions.getSession(roomId);
+  if (!session) return;
+
+  // Copy participants before closeSession deletes the session
+  const participants = [...session.participants];
+
+  yellowSessions
+    .closeSession(roomId)
+    .then(() => {
+      for (const addr of participants) {
+        const socketId = getSocketIdForAddress(addr);
+        if (socketId) {
+          const sock = io.sockets.sockets.get(socketId);
+          if (sock) {
+            sock.emit(EVENTS.SESSION_CLOSED, { roomId });
+          }
+        }
+      }
+    })
+    .catch((err) => console.error("[Yellow] Close failed:", err));
 }
 
 function broadcastPublicRooms(io: Server, roomManager: RoomManager): void {

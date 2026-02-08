@@ -1,3 +1,4 @@
+import { EVENTS } from "@playfrens/shared";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -115,6 +116,20 @@ export function App() {
       return () => clearTimeout(timer);
     }
   }, [lastHandResult, refetchBalance]);
+
+  // Refresh balances when session closes (covers players who left before session closed)
+  useEffect(() => {
+    function onSessionClosed() {
+      setTimeout(() => {
+        refetchBalance();
+        refetchWallet();
+      }, 1500);
+    }
+    socket.on(EVENTS.SESSION_CLOSED, onSessionClosed);
+    return () => {
+      socket.off(EVENTS.SESSION_CLOSED, onSessionClosed);
+    };
+  }, [socket, refetchBalance, refetchWallet]);
 
   // Show errors via react-hot-toast
   useEffect(() => {

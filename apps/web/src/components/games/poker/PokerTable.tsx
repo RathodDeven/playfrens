@@ -20,7 +20,7 @@ import { PotDisplay } from "./PotDisplay";
 const seatPositions = [
   { top: "82%", left: "50%", transform: "translate(-50%, -50%)" }, // 0: bottom center (hero)
   { top: "50%", left: "3%", transform: "translate(0, -50%)" }, // 1: left center
-  { top: "8%", left: "50%", transform: "translate(-50%, 0)" }, // 2: top center
+  { top: "1%", left: "50%", transform: "translate(-50%, 0)" }, // 2: top center
   { top: "50%", left: "97%", transform: "translate(-100%, -50%)" }, // 3: right center
 ];
 

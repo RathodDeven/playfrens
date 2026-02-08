@@ -24,6 +24,7 @@ export const EVENTS = {
   SESSION_SIGNED: "session-signed",
   SESSION_READY: "session-ready",
   SESSION_ERROR: "session-error",
+  SESSION_CLOSED: "session-closed",
 
   // Social
   SEND_REACTION: "send-reaction",

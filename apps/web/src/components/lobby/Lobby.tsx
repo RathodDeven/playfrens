@@ -220,7 +220,7 @@ function RoomCard({ room, onJoin }: { room: RoomInfo; onJoin: () => void }) {
             </span>{" "}
             chips
             <span className="text-white/30 ml-1">
-              ({formatYusd(room.config.buyIn * room.config.chipUnit)})
+              ({formatYusd(room.config.buyIn * room.config.chipUnit)} ytest.usd)
             </span>
           </span>
           <span className="text-white/20">|</span>
