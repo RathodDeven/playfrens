@@ -10,7 +10,7 @@ import {
   createGetLedgerBalancesMessage,
   createSubmitAppStateMessage,
 } from "@erc7824/nitrolite";
-import { CLEARNODE_WS_URL } from "@playfrens/shared";
+import { CLEARNODE_WS_URL, fromOnChainAmount } from "@playfrens/shared";
 import type { Address, Hex, WalletClient } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import WebSocket from "ws";
@@ -574,7 +574,7 @@ export class YellowClient {
     const match =
       balances.find((b) => b.asset === "ytest.usd") ??
       balances.find((b) => b.asset === "usdc");
-    const value = Number(match?.amount ?? 0);
+    const value = fromOnChainAmount(match?.amount ?? "0");
     if (Number.isNaN(value)) {
       throw new Error("Invalid ledger balance returned from Clearnode");
     }

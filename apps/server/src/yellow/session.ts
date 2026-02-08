@@ -1,4 +1,8 @@
-import type { AppSessionConfig, AppSessionStatus } from "@playfrens/shared";
+import {
+  type AppSessionConfig,
+  type AppSessionStatus,
+  toOnChainAmount,
+} from "@playfrens/shared";
 import { type Address, getAddress } from "viem";
 import type { AppSessionAllocation, AppSessionDefinition } from "./client.js";
 
@@ -70,7 +74,7 @@ export function createInitialAllocations(
   buyIn: number,
   chipUnit: number,
 ): AppSessionAllocation[] {
-  const playerAmount = String(roundAmount(buyIn * chipUnit));
+  const playerAmount = toOnChainAmount(buyIn * chipUnit);
   const allocations: AppSessionAllocation[] = participants.map((p) => ({
     participant: getAddress(p as `0x${string}`) as Address,
     asset: ASSET,
@@ -126,7 +130,8 @@ export function computeAllocations(
     return checksumParticipants.map((p, i) => ({
       participant: p as Address,
       asset: ASSET,
-      amount: i < checksumParticipants.length - 1 ? String(equalShare) : "0",
+      amount:
+        i < checksumParticipants.length - 1 ? toOnChainAmount(equalShare) : "0",
     }));
   }
 
@@ -160,7 +165,7 @@ export function computeAllocations(
   return checksumParticipants.map((p) => ({
     participant: p as Address,
     asset: ASSET,
-    amount: String(addressToAmount.get(p) ?? 0),
+    amount: toOnChainAmount(addressToAmount.get(p) ?? 0),
   }));
 }
 

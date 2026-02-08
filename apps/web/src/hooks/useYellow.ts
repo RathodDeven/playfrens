@@ -1,3 +1,4 @@
+import { fromOnChainAmount } from "@playfrens/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWalletClient } from "wagmi";
 import { requestFaucetTokens } from "../lib/yellow";
@@ -88,7 +89,7 @@ export function useYellow(address?: string) {
       const match =
         balances.find((b) => b.asset === "ytest.usd") ??
         balances.find((b) => b.asset === "usdc");
-      setBalance(match?.amount ?? "0");
+      setBalance(String(fromOnChainAmount(match?.amount ?? "0")));
     } catch (err) {
       console.error("Failed to fetch Yellow balance:", err);
     } finally {

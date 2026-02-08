@@ -20,3 +20,16 @@ export const CHIP_UNITS = [1, 0.01, 0.001] as const;
 
 export const REACTIONS = ["🔥", "🤣", "😭", "👀", "💀"] as const;
 export type Reaction = (typeof REACTIONS)[number];
+
+/** ytest.usd (like USDC) uses 6 decimal places on Clearnode */
+export const YTEST_DECIMALS = 6;
+
+/** Convert human-readable amount to on-chain smallest units (e.g., 10 → "10000000") */
+export function toOnChainAmount(amount: number): string {
+  return String(Math.round(amount * 10 ** YTEST_DECIMALS));
+}
+
+/** Convert on-chain smallest units to human-readable (e.g., "10000000" → 10) */
+export function fromOnChainAmount(raw: string): number {
+  return Number(raw) / 10 ** YTEST_DECIMALS;
+}

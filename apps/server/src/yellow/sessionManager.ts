@@ -1,3 +1,4 @@
+import { fromOnChainAmount } from "@playfrens/shared";
 import type { GameRoom } from "../games/GameRoom.js";
 import type { PokerRoom } from "../games/poker/PokerRoom.js";
 import type {
@@ -86,7 +87,7 @@ export class YellowSessionManager {
       (target === "ytest.usd"
         ? balances.find((b) => b.asset?.toLowerCase() === "usdc")
         : undefined);
-    const value = Number(match?.amount ?? 0);
+    const value = fromOnChainAmount(match?.amount ?? "0");
     if (Number.isNaN(value)) {
       throw new Error("Invalid ledger balance returned from Clearnode");
     }
